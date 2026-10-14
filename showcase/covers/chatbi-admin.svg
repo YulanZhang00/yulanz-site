@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="596" height="676" viewBox="0 0 596 676" fill="none">
+  <title>ChatBI 治理台：生命周期与问题诊断设计示意</title>
+  <rect width="596" height="676" fill="#e6e2db"/>
+  <g stroke="#d5cfc5" stroke-width="1"><path d="M0 104H596M0 574H596M38 0V676M558 0V676"/></g>
+  <g font-family="'Fragment Mono',monospace" fill="#797269" font-size="13" letter-spacing="2">
+    <text x="42" y="40">03 / CHATBI GOVERNANCE</text>
+    <text x="42" y="647">CONFIGURE · REVIEW · RELEASE</text>
+  </g>
+  <rect x="58" y="128" width="492" height="454" rx="12" fill="#d5cfc5"/>
+  <rect x="46" y="112" width="492" height="454" rx="12" fill="#faf8f3" stroke="#c7c0b5" stroke-width="1.5"/>
+  <path d="M46 160H538" stroke="#d8d1c7"/>
+  <circle cx="70" cy="136" r="4" fill="#df622f"/>
+  <circle cx="85" cy="136" r="4" fill="#d6cfc5"/>
+  <circle cx="100" cy="136" r="4" fill="#d6cfc5"/>
+  <text x="513" y="141" text-anchor="end" fill="#797269" font-family="monospace" font-size="12">ADMIN / 07</text>
+  <g font-family="'Microsoft YaHei','PingFang SC',sans-serif">
+    <text x="76" y="207" fill="#2a2724" font-size="28" font-weight="600">智能体治理</text>
+    <text x="76" y="233" fill="#797269" font-size="13">让上线判断有依据，让问题追溯有路径</text>
+    <g font-size="13">
+      <text x="87" y="270" fill="#797269">配置</text>
+      <path d="M127 265H193M185 260L193 265L185 270" stroke="#b6ada0"/>
+      <rect x="210" y="248" width="110" height="34" rx="17" fill="#f3e1d7"/>
+      <text x="239" y="270" fill="#ae4a24">评估诊断</text>
+      <path d="M337 265H403M395 260L403 265L395 270" stroke="#b6ada0"/>
+      <text x="436" y="270" fill="#797269">上线</text>
+    </g>
+    <rect x="76" y="307" width="150" height="207" rx="7" fill="#f0ece4"/>
+    <text x="92" y="336" fill="#797269" font-size="12">管理工作台</text>
+    <rect x="85" y="351" width="132" height="38" rx="5" fill="#e5ddd2"/>
+    <rect x="85" y="356" width="3" height="28" rx="1.5" fill="#df622f"/>
+    <text x="98" y="375" fill="#2a2724" font-size="14">问题诊断</text>
+    <text x="98" y="417" fill="#797269" font-size="13">连接与权限</text>
+    <text x="98" y="455" fill="#797269" font-size="13">效果评估</text>
+    <text x="98" y="493" fill="#797269" font-size="13">发布管理</text>
+    <rect x="241" y="307" width="267" height="207" rx="7" fill="#faf8f3" stroke="#d8d1c7"/>
+    <text x="258" y="338" fill="#2a2724" font-size="16" font-weight="600">一次定位，完整上下文</text>
+    <path d="M258 355H490M258 405H490M258 455H490" stroke="#e1dad0"/>
+    <g fill="#df622f" font-family="monospace" font-size="12"><text x="260" y="383">01</text><text x="260" y="433">02</text><text x="260" y="483">03</text></g>
+    <g fill="#675f55" font-size="13"><text x="289" y="383">检查连接与数据范围</text><text x="289" y="433">查看问题与失败归因</text><text x="289" y="483">确认修复与上线条件</text></g>
+    <text x="76" y="546" fill="#797269" font-size="11">从分散页面，到连贯的治理流程。</text>
+  </g>
+</svg>

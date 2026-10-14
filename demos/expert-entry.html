@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>分析专家入口上移 · 交互 Demo</title>
+<style>
+  :root {
+    --teal: #2c7a6e;
+    --teal-dark: #1f5f56;
+    --teal-bg: #eaf3f1;
+    --text-em: #1f2329;
+    --text: #46505c;
+    --text-hint: #8f959e;
+    --border: #e5e6eb;
+    --fill: #f5f6f7;
+    --bg: #fafbfc;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "PingFang SC", "Helvetica Neue", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+  .demo-note {
+    position: fixed; top: 16px; right: 16px; z-index: 50;
+    background: #fff; border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 14px; font-size: 12px; color: var(--text-hint);
+    box-shadow: 0 4px 16px rgba(0,0,0,.06); max-width: 240px; line-height: 1.6;
+  }
+  .demo-note b { color: var(--text-em); }
+  .demo-note .toggle {
+    display: inline-block; margin-top: 6px; color: var(--teal);
+    cursor: pointer; user-select: none; font-weight: 500;
+  }
+
+  .chat-scroll { flex: 1; overflow-y: auto; }
+  .chat-body { max-width: 800px; margin: 0 auto; padding: 48px 24px 24px; }
+
+  /* ── 欢迎区 ── */
+  .greet-head { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
+  .greet-avatar {
+    width: 44px; height: 44px; border-radius: 50%; background: #fbe9ef;
+    display: flex; align-items: center; justify-content: center; font-size: 22px;
+  }
+  .greet-title { font-size: 26px; font-weight: 700; color: var(--text-em); }
+  .greet-title em { font-style: italic; color: #a3766e; }
+  .greet-desc { font-size: 15px; line-height: 1.9; margin-bottom: 8px; }
+
+  /* 现状对比用：欢迎区卡片 */
+  .legacy-cards {
+    display: grid; grid-template-columns: repeat(4, minmax(0,1fr));
+    gap: 14px; margin: 18px 0 6px;
+  }
+  .legacy-cards.hidden, .hidden { display: none; }
+  .legacy-card {
+    border: 1px solid var(--border); border-radius: 12px; background: #fff;
+    padding: 16px; cursor: pointer; transition: border-color .15s;
+    min-height: 120px;
+  }
+  .legacy-card:hover { border-color: var(--teal); }
+  .legacy-card.selected { border-color: var(--teal); background: var(--teal-bg); }
+  .legacy-card .cap { width: 32px; height: 32px; border-radius: 8px; background: var(--teal); color:#fff; display:flex; align-items:center; justify-content:center; font-size:16px; margin-bottom: 20px; }
+  .legacy-card .nm { font-size: 16px; font-weight: 700; color: var(--text-em); margin-bottom: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .legacy-card .ds { font-size: 13px; color: var(--text-hint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* 推荐问题 */
+  .try-row { display: flex; align-items: center; gap: 10px; font-size: 15px; color: var(--text-em); margin-top: 22px; }
+  .try-row .refresh { color: var(--teal); cursor: pointer; font-size: 14px; }
+  .q-list { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+  .q-item {
+    align-self: flex-start; display: inline-flex; align-items: center; gap: 6px;
+    background: var(--fill); border-radius: 10px; padding: 10px 16px;
+    font-size: 14px; cursor: pointer; color: var(--text);
+  }
+  .q-item:hover { background: #eef0f2; }
+  .q-item .arrow { color: var(--text-hint); font-family: monospace; }
+
+  /* ── 会话消息 ── */
+  .msg-list { margin-top: 28px; display: flex; flex-direction: column; gap: 16px; }
+  .msg { max-width: 78%; padding: 10px 14px; border-radius: 12px; font-size: 14px; line-height: 1.7; }
+  .msg.user { align-self: flex-end; background: var(--teal); color: #fff; border-bottom-right-radius: 4px; }
+  .msg.bot { align-self: flex-start; background: #fff; border: 1px solid var(--border); border-bottom-left-radius: 4px; }
+  .session-divider {
+    display: flex; align-items: center; gap: 12px; color: var(--text-hint); font-size: 12px; margin-top: 28px;
+  }
+  .session-divider::before, .session-divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+
+  /* ── 输入区 ── */
+  .send-area { padding: 12px 24px 8px; }
+  .input-div { max-width: 800px; margin: 0 auto; }
+  .wrapper {
+    position: relative; background: #fff; border-radius: 16px;
+    border: 1px solid var(--border);
+    box-shadow: 0 3px 6px rgba(18,22,25,.02), 0 6px 12px rgba(18,22,25,.02);
+    transition: border-color .2s;
+  }
+  .wrapper.focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(44,122,110,.10); }
+
+  /* 辅助入口行（Bar） */
+  .assist-inner { padding: 12px 12px 0; }
+  .assist-entry { display: flex; align-items: center; gap: 12px; min-height: 40px; padding: 4px 8px 12px; flex-wrap: wrap; }
+  .entry-btn {
+    display: inline-flex; align-items: center; gap: 6px; border: 0; background: transparent;
+    color: var(--text-em); font-size: 14px; line-height: 24px; cursor: pointer; padding: 0;
+    font-family: inherit;
+  }
+  .entry-btn:hover { color: var(--teal); }
+  .entry-btn .pre { font-weight: 500; }
+  .entry-btn .ic { color: var(--text-hint); font-size: 14px; }
+  .entry-btn:hover .ic { color: var(--teal); }
+  .entry-divider { width: 1px; height: 16px; background: var(--border); }
+
+  /* 分析专家选择器（独立胶囊，层级高于其他文字入口） */
+  .expert-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    border: 1px solid var(--border); border-radius: 999px; padding: 5px 14px;
+    background: #fff; color: var(--text-em); font-size: 14px; line-height: 22px;
+    cursor: pointer; font-family: inherit; transition: border-color .15s, background .15s, color .15s;
+  }
+  .expert-pill:hover { border-color: var(--teal); color: var(--teal); }
+  .expert-pill .ic { font-size: 14px; }
+  .expert-pill .caret { font-size: 10px; color: var(--text-hint); transition: transform .2s; }
+  .expert-pill.open .caret { transform: rotate(180deg); }
+  .expert-pill.active {
+    background: var(--teal-bg); border-color: var(--teal); color: var(--teal-dark); font-weight: 600;
+  }
+  .expert-pill.active .caret { color: var(--teal); }
+  .expert-pill .x { color: var(--teal); font-size: 12px; padding: 0 2px; font-weight: 400; }
+  .expert-pill .x:hover { color: var(--teal-dark); }
+
+  /* 专家展开面板 */
+  .expert-panel { overflow: hidden; transition: height .32s cubic-bezier(.22,1,.36,1); height: 0; }
+  .expert-panel-inner { padding: 4px 8px 12px; }
+  .expert-panel-head {
+    display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;
+  }
+  .expert-panel-head .t { font-size: 13px; color: var(--text-hint); }
+  .expert-panel-head .close { border: 0; background: none; color: var(--text-hint); cursor: pointer; font-size: 14px; padding: 2px; }
+  .expert-list { max-height: 320px; overflow-y: auto; }
+  .expert-section-label { font-size: 12px; color: var(--text-hint); padding: 8px 10px 4px; }
+  .expert-section-label:first-child { padding-top: 0; }
+  .expert-row {
+    display: flex; align-items: center; gap: 12px; padding: 9px 10px;
+    border-radius: 10px; cursor: pointer; transition: background .12s;
+  }
+  .expert-row:hover { background: var(--fill); }
+  .expert-row.selected { background: var(--teal-bg); }
+  .expert-row .cap {
+    flex: none; width: 30px; height: 30px; border-radius: 8px; background: var(--teal);
+    color: #fff; display: flex; align-items: center; justify-content: center; font-size: 15px;
+  }
+  .expert-row .meta { flex: 1; min-width: 0; }
+  .expert-row .nm { font-size: 14px; font-weight: 600; color: var(--text-em); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .expert-row .ds { font-size: 12px; color: var(--text-hint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+  .expert-row .count { flex: none; display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--text-hint); }
+  .expert-row .selmark { flex: none; color: var(--teal); font-size: 14px; font-weight: 700; }
+
+  /* 输入主体 */
+  .wrapper-input { padding: 10px 16px 12px; }
+  .editor-row { position: relative; min-height: 72px; display: block; font-size: 15px; line-height: 26px; }
+  .editor {
+    display: inline; border: 0; outline: none; font: inherit; color: var(--text-em);
+    width: 100%; resize: none; background: transparent; vertical-align: top;
+  }
+  .editor::placeholder { color: #b9bec6; }
+  textarea.editor { min-height: 44px; }
+
+  .op-row { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
+  .mode-chips { display: flex; align-items: center; gap: 8px; }
+  .mode-chip {
+    display: inline-flex; align-items: center; gap: 5px; font-size: 13px;
+    border: 1px solid var(--border); border-radius: 8px; padding: 5px 12px;
+    background: #fff; color: var(--text); cursor: pointer; font-family: inherit;
+  }
+  .mode-chip.active { border-color: var(--teal); color: var(--teal); background: var(--teal-bg); font-weight: 500; }
+  .right-ops { display: flex; align-items: center; gap: 10px; }
+  .mic { color: var(--text-hint); cursor: pointer; font-size: 16px; }
+  .send-btn {
+    width: 34px; height: 34px; border-radius: 50%; border: 0; background: var(--teal);
+    color: #fff; cursor: pointer; font-size: 15px; opacity: .45;
+  }
+  .send-btn.ready { opacity: 1; }
+  .ai-tip { text-align: center; font-size: 12px; color: #b9bec6; padding: 8px 0 4px; }
+</style>
+</head>
+<body>
+
+<div class="demo-note">
+  <b>方案 Demo</b><br>
+  欢迎区专家卡片保留（首选入口）；输入框 Bar 左侧胶囊 = 会话中快捷切换器。<br>选中后胶囊变绿显示专家名，✕ 可移除。<br>
+  <b>试试：</b>从卡片选专家发一条消息，再通过胶囊切换专家——对话不中断，不用新建会话。
+</div>
+
+<div class="chat-scroll">
+  <div class="chat-body">
+    <div class="greet-head">
+      <div class="greet-avatar">💄</div>
+      <div class="greet-title">Hello~ 我是<em>美妆助理</em></div>
+    </div>
+    <div class="greet-desc">
+      你可以问我“美妆C端销售场景”相关的问题，快速获取数据结果。Meiko
+    </div>
+
+    <!-- 欢迎区专家卡片：新会话时展示，会话开始后隐藏（换专家走输入框胶囊） -->
+    <div class="legacy-cards" id="welcomeCards"></div>
+
+    <div class="try-row" id="tryRow">
+      <span id="tryLabel">可试着问我：</span>
+      <span class="refresh">换一批</span>
+    </div>
+    <div class="q-list" id="qList"></div>
+    <div class="msg-list" id="msgList"></div>
+  </div>
+</div>
+
+
+<div class="send-area">
+  <div class="input-div">
+    <div class="wrapper" id="wrapper">
+      <div class="assist-inner">
+        <!-- 辅助入口 Bar：分析专家(独立胶囊选择器，层级最高) ｜ 常用问题｜推荐提问｜指标清单 -->
+        <div class="assist-entry">
+          <button class="expert-pill" id="expertEntry">
+            <span class="ic">🎓</span><span id="expertEntryLabel">分析专家</span><span class="x hidden" id="expertPillX" title="移除专家">✕</span><span class="caret">▾</span>
+          </button>
+          <span class="entry-divider"></span>
+          <button class="entry-btn"><span class="pre">/</span><span>常用问题</span></button>
+          <span class="entry-divider"></span>
+          <button class="entry-btn"><span class="ic">✦</span><span>推荐提问</span></button>
+          <span class="entry-divider"></span>
+          <button class="entry-btn"><span class="ic">📋</span><span>指标清单</span></button>
+        </div>
+        <!-- 专家展开面板 -->
+        <div class="expert-panel" id="expertPanel">
+          <div class="expert-panel-inner">
+            <div class="expert-panel-head">
+              <span class="t">选择一位分析专家，围绕其场景进行洞察分析</span>
+              <button class="close" id="expertPanelClose">✕</button>
+            </div>
+            <div class="expert-list" id="expertGrid"></div>
+          </div>
+        </div>
+      </div>
+      <div class="wrapper-input">
+        <div class="editor-row" id="editorRow">
+          <textarea class="editor" id="editor" rows="2" placeholder="输入你的问题，或使用“/”选择常用问题"></textarea>
+        </div>
+        <div class="op-row">
+          <div class="mode-chips" id="modeChips">
+            <button class="mode-chip">💬 问数</button>
+            <button class="mode-chip active">✨ 洞察</button>
+            <button class="mode-chip">☰ 规划</button>
+          </div>
+          <div class="right-ops">
+            <span class="mic">🎙</span>
+            <button class="send-btn" id="sendBtn">↑</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="ai-tip">您正在使用AI工具，请注意保护个人隐私及敏感数据，并审慎核实 AI 生成的内容。</div>
+</div>
+
+<script>
+const EXPERTS = [
+  { id: 'e1', name: '新老客销售分析', desc: '新老客结构与复购贡献分析', count: '99.6k' },
+  { id: 'e2', name: '渠道合作分析专家', desc: '以toB渠道合作拓展为场景', count: '25.3k' },
+  { id: 'e3', name: '人力资源分析专家', desc: '人力资源分析专家', count: '13.2k' },
+  { id: 'e4', name: '财务分析专家', desc: '以toB企业财务健康度为核心', count: '8.4k' },
+  { id: 'e5', name: '供应链分析专家', desc: '推导贴合业务需求的补货策略', count: '5.1k' },
+  { id: 'e6', name: '产品分析专家', desc: '产品分析专家', count: '1.1k' },
+]
+const RECENT_KEY = 'demo_recent_experts'
+let recentIds = JSON.parse(localStorage.getItem(RECENT_KEY) || '["e3"]')
+
+function touchRecent (id) {
+  recentIds = [ id, ...recentIds.filter(x => x !== id) ].slice(0, 3)
+  localStorage.setItem(RECENT_KEY, JSON.stringify(recentIds))
+}
+const DEFAULT_QUESTIONS = [
+  '最近12个月会员与非会员的每月销售额、销量和订单数趋势分别如何？',
+  '最近3个月各品类的销售额和销量表现如何？',
+]
+const EXPERT_QUESTIONS = {
+  e1: [ '最近6个月新客与老客的销售额占比变化如何？', '老客复购率最高的前5个品类是哪些？', '新客首单转化到二次购买的平均间隔是多久？' ],
+  e2: [ '各渠道合作伙伴最近一个季度的出货额排名如何？', '哪些渠道的同比增速超过30%？', '渠道返利投入与销售增长的相关性如何？' ],
+  e3: [ '各部门最近半年的人均产出趋势如何？', '销售团队的人员流失率与业绩达成的关系？', '哪些岗位的招聘周期明显拉长？' ],
+  e4: [ '最近4个季度毛利率的变化趋势及主要驱动因素？', '应收账款周转天数环比变化如何？', '各产品线的费用率对比情况？' ],
+  e5: [ '哪些SKU的库存周转天数超过90天？', '主要仓库的缺货率最近3个月变化如何？', '按当前销量预测，哪些爆品两周内需要补货？' ],
+  e6: [ '最近上新的产品首月动销率表现如何？', '各价格带产品的销量分布情况？', '退货率最高的前10个产品及主要原因？' ],
+}
+
+let selected = null
+let panelOpen = false
+let inSession = false       // 是否已产生对话（session_id !== 'default'）
+let messages = []
+
+const $ = id => document.getElementById(id)
+const panel = $('expertPanel')
+const grid = $('expertGrid')
+const entry = $('expertEntry')
+const entryLabel = $('expertEntryLabel')
+const editorRow = $('editorRow')
+const editor = $('editor')
+const qList = $('qList')
+const modeChips = $('modeChips')
+
+function renderGrid () {
+  const head = document.querySelector('.expert-panel-head .t')
+  head.textContent = inSession
+    ? '切换分析专家后，将保留当前对话上下文继续分析'
+    : '选择一位分析专家，围绕其场景进行洞察分析'
+  const row = e => `
+    <div class="expert-row ${selected === e.id ? 'selected' : ''}" data-id="${e.id}">
+      <div class="cap">🎓</div>
+      <div class="meta">
+        <div class="nm">${e.name}</div>
+        <div class="ds">${e.desc}</div>
+      </div>
+      ${selected === e.id ? '<span class="selmark">✓</span>' : ''}
+      <span class="count">✦ ${e.count}</span>
+    </div>`
+  const recent = recentIds.map(id => EXPERTS.find(e => e.id === id)).filter(Boolean)
+  grid.innerHTML = [
+    recent.length ? `<div class="expert-section-label">最近使用</div>${recent.map(row).join('')}` : '',
+    `<div class="expert-section-label">全部专家</div>${EXPERTS.map(row).join('')}`,
+  ].join('')
+}
+
+function renderQuestions () {
+  const qs = selected ? EXPERT_QUESTIONS[selected] : DEFAULT_QUESTIONS
+  qList.innerHTML = qs.map(q => `<div class="q-item"><span>${q}</span><span class="arrow">›</span></div>`).join('')
+  // 对话开始后隐藏推荐问题区
+  $('tryRow').style.display = inSession ? 'none' : 'flex'
+  qList.style.display = inSession ? 'none' : 'flex'
+}
+
+function renderChip () {
+  // 专家状态统一呈现在 Bar 左侧的胶囊选择器上，不再在输入框内放 chip
+  const pillX = $('expertPillX')
+  if (selected) {
+    const e = EXPERTS.find(x => x.id === selected)
+    editor.placeholder = `向「${e.name}」提问，回车发送`
+    entryLabel.textContent = e.name
+    entry.classList.add('active')
+    pillX.classList.remove('hidden')
+    modeChips.style.visibility = 'hidden' // 对齐现有行为：选中专家后隐藏模式切换
+  } else {
+    editor.placeholder = '输入你的问题，或使用“/”选择常用问题'
+    entryLabel.textContent = '分析专家'
+    entry.classList.remove('active')
+    pillX.classList.add('hidden')
+    modeChips.style.visibility = 'visible'
+  }
+}
+
+function renderMessages () {
+  const list = $('msgList')
+  list.innerHTML = messages.map(m => m.role === 'divider'
+    ? `<div class="session-divider">${m.text}</div>`
+    : `<div class="msg ${m.role}">${m.text}</div>`).join('')
+}
+
+function setPanel (open) {
+  panelOpen = open
+  entry.classList.toggle('open', open)
+  if (open) {
+    renderGrid()
+    panel.style.height = panel.querySelector('.expert-panel-inner').getBoundingClientRect().height + 'px'
+  } else {
+    panel.style.height = '0px'
+  }
+}
+
+function selectExpert (id) {
+  const prev = selected
+  selected = selected === id ? null : id
+  if (selected) touchRecent(selected)
+  // 对话进行中直接切换：保留当前会话上下文，消息流里插一条系统提示标记切换点
+  if (inSession && selected !== prev) {
+    const target = EXPERTS.find(x => x.id === selected)
+    const from = EXPERTS.find(x => x.id === prev)
+    messages.push({
+      role: 'divider',
+      text: target
+        ? (from ? `已从「${from.name}」切换到「${target.name}」，继续基于当前对话分析` : `已启用「${target.name}」，继续基于当前对话分析`)
+        : `已移除「${from.name}」，继续普通洞察分析`,
+    })
+    renderMessages()
+    document.querySelector('.chat-scroll').scrollTop = 1e6
+  }
+  renderChip()
+  renderQuestions()
+  renderWelcomeCards()
+  setPanel(false)
+  editor.focus()
+}
+
+function sendMessage () {
+  const text = editor.value.trim()
+  if (!text) return
+  const expert = EXPERTS.find(x => x.id === selected)
+  messages.push({ role: 'user', text })
+  messages.push({
+    role: 'bot',
+    text: expert
+      ? `（示意回复）已按「${expert.name}」的分析场景处理这个问题，生成对应的洞察结论…`
+      : '（示意回复）已生成对应的数据结果…',
+  })
+  inSession = true
+  editor.value = ''
+  $('sendBtn').classList.remove('ready')
+  renderMessages()
+  renderChip()       // 会话开始后 chip 变为锁定态
+  renderQuestions()  // 隐藏推荐问题区
+  renderWelcomeCards() // 会话开始后隐藏欢迎区专家卡片
+  if (panelOpen) renderGrid()
+  document.querySelector('.chat-scroll').scrollTop = 1e6
+}
+
+entry.onclick = () => setPanel(!panelOpen)
+$('expertPillX').onclick = (e) => {
+  e.stopPropagation()  // 别触发胶囊本身的面板开关
+  selectExpert(selected)
+}
+$('expertPanelClose').onclick = () => setPanel(false)
+grid.onclick = (ev) => {
+  const item = ev.target.closest('.expert-row')
+  if (item) selectExpert(item.dataset.id)
+}
+$('sendBtn').onclick = sendMessage
+
+// 欢迎区专家卡片：新会话时展示，会话开始后隐藏
+function renderWelcomeCards () {
+  const cards = $('welcomeCards')
+  cards.style.display = inSession ? 'none' : 'grid'
+  if (inSession) return
+  cards.innerHTML = EXPERTS.map(e => `
+    <div class="legacy-card ${selected === e.id ? 'selected' : ''}" data-id="${e.id}">
+      <div class="cap">🎓</div>
+      <div class="nm">${e.name}</div>
+      <div class="ds">${e.desc}</div>
+    </div>`).join('')
+}
+$('welcomeCards').onclick = (ev) => {
+  const item = ev.target.closest('.legacy-card')
+  if (item) selectExpert(item.dataset.id)
+}
+
+// 输入态
+const wrapper = $('wrapper')
+editor.onfocus = () => wrapper.classList.add('focus')
+editor.onblur = () => wrapper.classList.remove('focus')
+editor.oninput = () => $('sendBtn').classList.toggle('ready', editor.value.trim() !== '')
+editor.onkeydown = (e) => {
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+    e.preventDefault()
+    sendMessage()
+  }
+}
+
+renderQuestions()
+renderWelcomeCards()
+</script>
+</body>
+</html>

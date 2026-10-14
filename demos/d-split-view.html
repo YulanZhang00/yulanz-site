@@ -1,0 +1,2768 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智能报告编辑器 · 方案D 双模式分屏</title>
+<style>
+/* ========== GDS Tokens ========== */
+:root{
+  --primary:#1a827f; --primary-hover:#339b98; --primary-active:#016966; --primary-bg:#eef4f4;
+  --text-em:#21272a; --text:#343a3f; --text-2:#697077; --hint:#878d96; --disable:#a2a9b0;
+  --bg:#f2f4f8; --alt:#ffffff; --selected:#eef4f4; --divide:#dde1e6; --outline:#cdd3da;
+  --table-head:#f2f4f8;
+  --info:#0f62fe; --info-bg:#edf5ff; --info-border:#a6c8ff;
+  --success:#198038; --success-bg:#defbe6; --success-border:#a7f0ba;
+  --warn:#8a6a00; --warn-border:#f1c21b; --warn-bg:#fcf4d6;
+  --error:#da1e28; --error-bg:#fff1f1; --error-border:#ffd7d9;
+  --purple:#6929c4; --purple-bg:#e8daff;
+  --radius-s:2px; --radius-m:4px;
+  --shadow-panel:0 2px 6px rgba(67,67,67,.06), 0 1px 5.2px rgba(68,68,68,.09);
+  --shadow-pop:0 5px 12px 4px rgba(0,0,0,.04), 0 3px 6px rgba(0,0,0,.16), 0 1px 2px -2px rgba(0,0,0,.16);
+  --mono:"SF Mono","JetBrains Mono",Menlo,Consolas,"Courier New",monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%}
+/* 修复:#app 此前没有显式高度,#main 的 height:calc(100% - 52px) 就没有有效的百分比基准,
+   一旦卡片内容变高(超过一屏)整份页面就会失控地一直往下长,而 body 又是 overflow:hidden——
+   两侧分栏各自独立滚动的既有设计(#card-list / #paper-scroll 早已写了 overflow-y:auto)
+   因此完全无法生效,内容超出视口的部分直接不可见也无法触达。这里只补一条不影响任何
+   视觉样式的结构性高度声明,让分栏滚动按原设计工作。 */
+#app{height:100%}
+body{
+  font-family:"Inter","Helvetica Neue","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  font-size:12px;line-height:20px;color:var(--text);background:var(--bg);
+  -webkit-font-smoothing:antialiased;overflow:hidden;
+}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+button:disabled{cursor:not-allowed}
+input,textarea{font-family:inherit;color:var(--text)}
+textarea{resize:vertical}
+::selection{background:#b4e9e7}
+
+/* ========== 顶栏 ========== */
+#topbar{
+  height:52px;background:var(--alt);border-bottom:1px solid var(--divide);
+  display:flex;align-items:center;justify-content:space-between;padding:0 16px;gap:16px;position:relative;z-index:30;
+}
+.tb-left{display:flex;align-items:center;gap:10px;min-width:0}
+.logo{width:28px;height:28px;border-radius:var(--radius-m);background:linear-gradient(135deg,var(--primary),#0e5c5a);display:flex;align-items:center;justify-content:center;color:#fff;flex:none}
+.tb-titles{min-width:0}
+#docname{
+  border:1px solid transparent;border-radius:var(--radius-s);font-size:14px;font-weight:600;color:var(--text-em);
+  padding:1px 6px;width:240px;background:transparent;transition:border-color .15s, background .15s;
+}
+#docname:hover{border-color:var(--outline)}
+#docname:focus{outline:none;border-color:var(--primary);background:var(--alt)}
+.tb-sub{font-size:10px;line-height:14px;color:var(--hint);padding-left:7px}
+.tb-right{display:flex;align-items:center;gap:8px}
+.tb-divider{width:1px;height:20px;background:var(--divide);margin:0 4px}
+.tb-demo{display:inline-flex;align-items:center;gap:5px;padding:1px 4px 1px 1px;border:1px dashed var(--divide);border-radius:var(--radius-m);opacity:.72;transition:opacity .15s}
+.tb-demo:hover{opacity:1}
+.tb-demo-tag{display:inline-flex;align-items:center;height:16px;padding:0 6px;border-radius:100px;background:var(--bg);color:var(--hint);font-size:9px;font-weight:700;letter-spacing:.5px;flex:none;border:1px solid var(--divide)}
+.tb-demo .btn{height:22px;padding:0 7px;font-size:10.5px;border-color:transparent;background:transparent;color:var(--text-2)}
+.tb-demo .btn:hover:not(:disabled){background:var(--bg);color:var(--text);border-color:var(--divide)}
+.tb-demo .btn svg{width:11px;height:11px}
+.tb-save-hint{font-size:10px;color:var(--hint);white-space:nowrap;padding:0 2px}
+
+.btn{
+  display:inline-flex;align-items:center;gap:5px;height:28px;padding:0 12px;border-radius:var(--radius-s);
+  font-size:12px;border:1px solid var(--outline);background:var(--alt);color:var(--text);
+  transition:all .15s;white-space:nowrap;
+}
+.btn:hover:not(:disabled){border-color:var(--primary-hover);color:var(--primary-hover)}
+.btn:active:not(:disabled){border-color:var(--primary-active);color:var(--primary-active)}
+.btn:disabled{color:var(--disable);border-color:var(--divide);background:var(--bg)}
+.btn-primary{background:var(--primary);border-color:var(--primary);color:#fff}
+.btn-primary:hover:not(:disabled){background:var(--primary-hover);border-color:var(--primary-hover);color:#fff}
+.btn-primary:active:not(:disabled){background:var(--primary-active);border-color:var(--primary-active)}
+.btn-primary:disabled{background:var(--divide);border-color:var(--divide);color:#fff}
+.btn-text{border-color:transparent;background:transparent;color:var(--primary);padding:0 6px}
+.btn-text:hover:not(:disabled){color:var(--primary-hover);background:var(--primary-bg);border-color:transparent}
+.btn-text:disabled{color:var(--disable);background:transparent;border-color:transparent}
+.btn-sm{height:24px;padding:0 8px;font-size:12px}
+.btn .spin{margin-right:2px}
+
+.v-chip{
+  display:inline-flex;align-items:center;height:18px;padding:0 6px;border-radius:100px;
+  background:var(--bg);border:1px solid var(--divide);color:var(--text-2);font-size:10px;font-weight:600;margin-left:2px;
+}
+.chip-stale{
+  display:inline-flex;align-items:center;gap:4px;height:28px;padding:0 10px;border-radius:100px;
+  background:var(--warn-bg);border:1px solid var(--warn-border);color:var(--warn);font-size:12px;font-weight:500;
+  animation:pulse-w 2s ease-in-out infinite;
+}
+.chip-stale:hover{filter:brightness(.97)}
+@keyframes pulse-w{0%,100%{box-shadow:0 0 0 0 rgba(241,194,27,.35)}50%{box-shadow:0 0 0 4px rgba(241,194,27,0)}}
+
+.seg{display:flex;background:var(--bg);border:1px solid var(--divide);border-radius:var(--radius-m);padding:2px;gap:2px}
+.seg-btn{height:24px;padding:0 12px;border-radius:var(--radius-s);font-size:12px;color:var(--text-2);display:inline-flex;align-items:center;gap:5px;transition:all .15s}
+.seg-btn:hover{color:var(--text-em)}
+.seg-btn.on{background:var(--alt);color:var(--primary);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+
+/* ========== 主体分屏 ========== */
+#main{display:flex;height:calc(100% - 52px)}
+#editor-pane{
+  width:446px;flex:none;background:var(--bg);border-right:1px solid var(--divide);
+  display:flex;flex-direction:column;transition:margin-left .25s ease,opacity .2s;
+}
+body.mode-read #editor-pane{margin-left:-446px;opacity:0;pointer-events:none}
+.pane-head{
+  height:38px;flex:none;display:flex;align-items:center;gap:8px;padding:0 16px;
+  border-bottom:1px solid var(--divide);background:var(--alt);font-size:12px;color:var(--text-2);
+}
+.pane-head b{color:var(--text-em);font-weight:600;font-size:12px}
+.pane-head .ph-hint{margin-left:auto;font-size:10px;color:var(--hint)}
+#card-list{flex:1;overflow-y:auto;overflow-x:hidden;padding:6px 14px 40px}
+#preview-pane{flex:1;display:flex;flex-direction:column;min-width:0;background:#e9ecf1}
+#paper-scroll{flex:1;overflow-y:auto;padding:28px 40px 80px}
+#paper{
+  background:var(--alt);max-width:800px;margin:0 auto;min-height:calc(100% - 8px);
+  box-shadow:0 1px 3px rgba(33,39,42,.10),0 8px 28px rgba(33,39,42,.10);
+  border-radius:3px;padding:56px 64px 72px;position:relative;
+}
+body.mode-read #paper{max-width:860px;padding:64px 84px 88px}
+#print-header{display:none}
+
+/* ========== 左侧配置卡 ========== */
+.cfg-card{
+  background:var(--alt);border:1px solid var(--divide);border-left:3px solid var(--outline);
+  border-radius:var(--radius-m);box-shadow:var(--shadow-panel);margin:2px 0;
+  transition:border-color .15s, box-shadow .15s, opacity .15s;position:relative;
+}
+.cfg-card.t-static{border-left-color:#a2a9b0}
+.cfg-card.t-sql{border-left-color:#00539a}
+.cfg-card.t-insight{border-left-color:var(--purple)}
+.cfg-card:hover{box-shadow:var(--shadow-pop)}
+.cfg-card.peer-hover{border-color:var(--primary-hover)}
+.cfg-card.selected{border-color:var(--primary);box-shadow:0 0 0 1px var(--primary), var(--shadow-panel)}
+/* flashEl() 也会给左侧配置卡加这个类(selectCard 从右向左联动时),需要与 .pv-block.flash
+   等效的动画,否则左侧闪烁定位在视觉上完全没有效果。keyframes 见下方 flash-outline 定义。 */
+.cfg-card.flash{animation:flash-outline 1s ease}
+.cfg-card.dragging{opacity:.35}
+.cfg-card.drop-before::before,.cfg-card.drop-after::after{
+  content:"";position:absolute;left:8px;right:8px;height:3px;border-radius:2px;background:var(--primary);z-index:5;
+}
+.cfg-card.drop-before::before{top:-7px}
+.cfg-card.drop-after::after{bottom:-7px}
+
+.cfg-head{display:flex;align-items:center;gap:6px;padding:8px 8px 8px 4px;min-height:38px}
+.drag{color:var(--outline);cursor:grab;padding:2px 0 2px 4px;flex:none;display:flex}
+.drag:hover{color:var(--hint)}
+.drag:active{cursor:grabbing}
+.type-ico{width:22px;height:22px;border-radius:var(--radius-m);display:flex;align-items:center;justify-content:center;flex:none}
+.type-ico.t-static{background:#e4e7eb;color:#565f66}
+.type-ico.t-sql{background:#d9edff;color:#00539a}
+.type-ico.t-insight{background:var(--purple-bg);color:var(--purple)}
+.title-input{
+  flex:1;min-width:0;border:1px solid transparent;border-radius:var(--radius-s);
+  font-size:13px;font-weight:600;color:var(--text-em);padding:2px 6px;background:transparent;transition:border-color .15s;
+}
+.title-input:hover{border-color:var(--outline)}
+.title-input:focus{outline:none;border-color:var(--primary)}
+.icon-btn{
+  width:24px;height:24px;border-radius:var(--radius-s);display:inline-flex;align-items:center;justify-content:center;
+  color:var(--hint);flex:none;transition:all .12s;
+}
+.icon-btn:hover{background:var(--bg);color:var(--text)}
+.icon-btn.danger:hover{background:var(--error-bg);color:var(--error)}
+.icon-btn .chev{transition:transform .18s}
+.cfg-card.collapsed .icon-btn .chev{transform:rotate(-90deg)}
+.cfg-sum{padding:0 12px 10px 36px;color:var(--hint);font-size:11px;line-height:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cfg-body{border-top:1px solid var(--bg);padding:10px 12px 12px 12px}
+
+.badge{
+  display:inline-flex;align-items:center;gap:4px;height:20px;padding:0 8px;border-radius:100px;
+  font-size:10px;font-weight:600;flex:none;white-space:nowrap;border:1px solid transparent;
+}
+.badge .dot{width:5px;height:5px;border-radius:50%;background:currentColor}
+.badge.s-unconfigured{background:var(--bg);color:var(--hint);border-color:var(--divide)}
+.badge.s-previewable{background:var(--info-bg);color:var(--info);border-color:var(--info-border)}
+.badge.s-previewing,.badge.s-generating{background:var(--info-bg);color:var(--info);border-color:var(--info-border)}
+.badge.s-ready,.badge.s-done{background:var(--success-bg);color:var(--success);border-color:var(--success-border)}
+.badge.s-stale{background:var(--warn-bg);color:var(--warn);border-color:var(--warn-border);animation:pulse-w 2s infinite}
+.badge.s-invalid{background:var(--error-bg);color:var(--error);border-color:var(--error-border)}
+.badge.s-generatable{background:var(--info-bg);color:var(--info);border-color:var(--info-border)}
+
+.fld{margin-bottom:10px}
+.fld:last-child{margin-bottom:0}
+.fld>label{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:var(--text-2);margin-bottom:5px}
+.fld-hint{font-weight:400;color:var(--hint);font-size:10px}
+.fld textarea,.fld input[type=text]{
+  width:100%;border:1px solid var(--outline);border-radius:var(--radius-s);padding:6px 8px;font-size:12px;line-height:18px;
+  background:var(--alt);transition:border-color .15s;
+}
+.fld textarea:hover,.fld input[type=text]:hover{border-color:var(--hint)}
+.fld textarea:focus,.fld input[type=text]:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 2px rgba(26,130,127,.12)}
+textarea.code{font-family:var(--mono);font-size:11px;line-height:17px;background:#fbfcfd;color:#24504f;white-space:pre;overflow-x:auto}
+.fld-row{display:flex;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap}
+.fld-reason{font-size:10px;color:var(--hint)}
+.mini-tag{display:inline-flex;height:16px;align-items:center;padding:0 6px;border-radius:100px;background:var(--warn-bg);color:var(--warn);font-size:10px;font-weight:600}
+
+/* 查询列表 */
+.q-item{
+  display:flex;align-items:center;gap:6px;border:1px solid var(--divide);border-radius:var(--radius-s);
+  padding:5px 6px;margin-bottom:5px;background:#fafbfc;transition:border-color .15s;
+}
+.q-item:hover{border-color:var(--outline)}
+.q-item .q-ico{color:#00539a;flex:none;display:flex}
+.q-name{font-weight:600;color:var(--text-em);white-space:nowrap;font-size:11px}
+.q-sql{
+  flex:1;min-width:0;font-family:var(--mono);font-size:10px;color:var(--hint);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.q-add{
+  width:100%;border:1px dashed var(--outline);border-radius:var(--radius-s);height:26px;
+  color:var(--primary);font-size:11px;display:flex;align-items:center;justify-content:center;gap:4px;transition:all .15s;background:transparent;
+}
+.q-add:hover{border-color:var(--primary);background:var(--primary-bg)}
+
+/* 引用列表 */
+.ref-item{
+  display:flex;align-items:center;gap:7px;border:1px solid var(--divide);border-radius:var(--radius-s);
+  padding:6px 8px;margin-bottom:5px;cursor:pointer;transition:all .15s;background:var(--alt);
+}
+.ref-item:hover{border-color:var(--outline)}
+.ref-item.is-checked{border-color:var(--primary);background:var(--primary-bg)}
+.ref-item.is-disabled{cursor:not-allowed;background:var(--bg);opacity:.75}
+.ref-item.is-invalid{border-color:var(--error-border);background:var(--error-bg)}
+.ref-item input{accent-color:var(--primary);flex:none}
+.ref-name{font-weight:600;color:var(--text-em);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ref-reason{margin-left:auto;font-size:10px;color:var(--hint);flex:none}
+.ref-empty{font-size:11px;color:var(--hint);border:1px dashed var(--divide);border-radius:var(--radius-s);padding:8px;text-align:center}
+
+/* 横幅 */
+.banner{
+  display:flex;align-items:flex-start;gap:7px;border-radius:var(--radius-s);padding:7px 9px;margin:10px 0 0;
+  font-size:11px;line-height:16px;border:1px solid;
+}
+.banner .bn-ico{flex:none;margin-top:1px}
+.banner .bn-body{flex:1}
+.banner .bn-act{display:flex;gap:6px;margin-top:5px}
+.banner.warn{background:var(--warn-bg);border-color:var(--warn-border);color:var(--warn)}
+.banner.info{background:var(--info-bg);border-color:var(--info-border);color:#00419e}
+.banner.error{background:var(--error-bg);border-color:var(--error-border);color:var(--error)}
+
+.cfg-actions{display:flex;align-items:center;gap:8px;margin-top:12px;padding-top:10px;border-top:1px dashed var(--divide)}
+.cfg-meta{margin-left:auto;font-size:10px;color:var(--hint);text-align:right;line-height:14px}
+
+/* 富文本工具条 */
+.rt-toolbar{display:flex;gap:2px;border:1px solid var(--outline);border-bottom:none;border-radius:var(--radius-s) var(--radius-s) 0 0;background:#fafbfc;padding:3px}
+.rt-btn{
+  min-width:24px;height:22px;padding:0 6px;border-radius:var(--radius-s);font-size:11px;color:var(--text-2);
+  display:inline-flex;align-items:center;justify-content:center;transition:all .12s;
+}
+.rt-btn:hover{background:var(--selected);color:var(--primary)}
+.rt-btn b{font-weight:700}.rt-btn i{font-style:italic}.rt-btn u{text-decoration:underline}
+.rt-sep{width:1px;background:var(--divide);margin:2px 3px}
+.rich-editor{
+  border:1px solid var(--outline);border-radius:0 0 var(--radius-s) var(--radius-s);min-height:72px;max-height:220px;overflow-y:auto;
+  padding:8px 10px;font-size:12px;line-height:1.7;background:var(--alt);
+}
+.rich-editor:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 2px rgba(26,130,127,.12)}
+.rich-editor h1{font-size:16px;line-height:1.5;margin:2px 0;color:var(--text-em)}
+.rich-editor h2{font-size:14px;line-height:1.5;margin:2px 0;color:var(--text-em)}
+.rich-editor p{margin:2px 0}
+.rich-editor ul{padding-left:18px;margin:2px 0}
+
+/* 插入区 */
+.ins-zone{position:relative;height:14px;display:flex;align-items:center;justify-content:center;margin:0}
+.ins-zone .ins-line{position:absolute;left:10px;right:10px;top:50%;height:1px;background:var(--primary);opacity:0;transition:opacity .15s}
+.ins-btn{
+  position:relative;z-index:2;width:18px;height:18px;border-radius:50%;background:var(--alt);border:1px solid var(--outline);
+  color:var(--hint);display:flex;align-items:center;justify-content:center;opacity:0;transform:scale(.8);transition:all .15s;
+}
+.ins-zone:hover .ins-btn,.ins-zone.open .ins-btn{opacity:1;transform:scale(1)}
+.ins-zone:hover .ins-line,.ins-zone.open .ins-line{opacity:.5}
+.ins-btn:hover,.ins-zone.open .ins-btn{background:var(--primary);border-color:var(--primary);color:#fff}
+.ins-menu{
+  display:none;position:absolute;top:20px;left:50%;transform:translateX(-50%);z-index:20;width:246px;
+  background:var(--alt);border:1px solid var(--divide);border-radius:var(--radius-m);box-shadow:var(--shadow-pop);padding:4px;
+}
+.ins-zone.open .ins-menu{display:block;animation:menu-in .14s ease}
+@keyframes menu-in{from{opacity:0;transform:translateX(-50%) translateY(-4px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+.ins-zone .ins-menu.flip-up{top:auto;bottom:20px}
+.ins-zone.open .ins-menu.flip-up{animation:menu-in-up .14s ease}
+@keyframes menu-in-up{from{opacity:0;transform:translateX(-50%) translateY(4px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+.ins-item{display:flex;align-items:center;gap:9px;width:100%;padding:7px 9px;border-radius:var(--radius-s);text-align:left;transition:background .12s}
+.ins-item:hover{background:var(--selected)}
+.ins-item .type-ico{width:26px;height:26px}
+.ins-item b{display:block;font-size:12px;color:var(--text-em);line-height:16px}
+.ins-item span{display:block;font-size:10px;color:var(--hint);line-height:14px}
+
+.add-bar{display:flex;align-items:center;gap:6px;margin-top:6px;padding:0 2px;color:var(--hint);font-size:11px}
+.add-bar .btn-sm{border-style:dashed}
+
+/* 左侧空状态 */
+.empty-left{padding:44px 26px;text-align:center}
+.empty-left .e-ico{width:64px;height:64px;margin:0 auto 16px;border-radius:14px;background:var(--alt);border:1px solid var(--divide);display:flex;align-items:center;justify-content:center;color:var(--primary);box-shadow:var(--shadow-panel)}
+.empty-left h3{font-size:15px;color:var(--text-em);margin-bottom:6px}
+.empty-left p{color:var(--text-2);font-size:12px;line-height:19px;margin-bottom:16px}
+.empty-types{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
+.empty-types .ins-item{border:1px solid var(--divide);background:var(--alt)}
+.empty-types .ins-item:hover{border-color:var(--primary-hover);background:var(--selected)}
+.empty-or{display:flex;align-items:center;gap:10px;color:var(--hint);font-size:10px;margin:10px 0 12px}
+.empty-or::before,.empty-or::after{content:"";flex:1;height:1px;background:var(--divide)}
+
+/* ========== 右侧成品预览 ========== */
+.pv-block{position:relative;border-radius:var(--radius-s);margin:0 -14px;padding:6px 14px;transition:background .15s, box-shadow .15s}
+body:not(.mode-read) .pv-block{cursor:pointer}
+body:not(.mode-read) .pv-block.peer-hover{background:#f6f9f9}
+body:not(.mode-read) .pv-block.selected{box-shadow:0 0 0 1.5px var(--primary);background:#f9fcfc}
+.pv-block.flash{animation:flash-outline 1s ease}
+@keyframes flash-outline{0%{box-shadow:0 0 0 3px rgba(26,130,127,.55)}100%{box-shadow:0 0 0 1.5px rgba(26,130,127,0)}}
+
+.pv-static{font-size:14px;line-height:1.9;color:var(--text)}
+.pv-static h1{font-size:26px;line-height:1.45;color:var(--text-em);font-weight:700;letter-spacing:.5px;margin:4px 0 10px}
+.pv-static h2{font-size:18px;line-height:1.5;color:var(--text-em);font-weight:600;margin:14px 0 6px}
+.pv-static p{margin:6px 0}
+.pv-static ul{padding-left:22px;margin:6px 0}
+.pv-static .muted{color:var(--hint);font-size:12px}
+/* 未修改过的默认占位文案(编辑态):浅色斜体,与真正已填写的正文明显区分,不至于被误当成正文 */
+.pv-block.pv-untouched .pv-static{color:var(--hint);font-style:italic}
+
+.pv-caption{display:flex;align-items:baseline;gap:8px;font-size:15px;font-weight:600;color:var(--text-em);margin:16px 0 8px;padding-left:9px;border-left:3px solid var(--primary);line-height:1.5}
+.pv-qname{font-size:11px;color:var(--text-2);margin:10px 0 4px;font-weight:600}
+.pv-meta{font-size:10px;color:var(--hint);margin-top:6px}
+.pv-text{font-size:13.5px;line-height:1.9;color:var(--text);margin:8px 0 2px}
+
+.rep-table{width:100%;border-collapse:collapse;font-size:12px;margin:4px 0;border:1px solid var(--divide)}
+.rep-table th{
+  background:var(--table-head);color:var(--text-2);font-weight:600;text-align:left;
+  padding:7px 10px;border-bottom:1px solid var(--divide);white-space:nowrap;
+}
+.rep-table td{padding:6px 10px;border-bottom:1px solid #eaedf1;color:var(--text);white-space:nowrap}
+.rep-table tr:last-child td{border-bottom:none}
+.rep-table tr:hover td{background:#f7f9fb}
+.rep-table td.num{font-variant-numeric:tabular-nums;text-align:right}
+.rep-table .mono{font-family:var(--mono);font-size:11px}
+.cell-bar{position:relative;display:inline-block;min-width:90px}
+.cell-bar .bar{position:absolute;left:0;top:2px;bottom:2px;background:#b4e9e7;border-radius:1px;z-index:0}
+.cell-bar span{position:relative;z-index:1;padding-left:4px;font-variant-numeric:tabular-nums}
+
+.chip{display:inline-flex;align-items:center;height:18px;padding:0 7px;border-radius:100px;font-size:10px;font-weight:600}
+.chip.lv-high{background:#ffd7d9;color:#a2191f}
+.chip.lv-mid{background:#fff1c2;color:#8a6a00}
+.chip.lv-low{background:#d0e2ff;color:#002d9c}
+.chip.st-open{background:#ffd7d9;color:#a2191f}
+.chip.st-doing{background:#d0e2ff;color:#00539a}
+.chip.st-done{background:#a7f0ba;color:#0e6027}
+.chip.st-ignore{background:#dde1e6;color:#565f66}
+
+/* 洞见块 */
+.pv-insight-box{background:var(--primary-bg);border-left:3px solid var(--primary);border-radius:var(--radius-s);padding:14px 18px;margin:14px 0 4px}
+.ins-head{display:flex;align-items:center;gap:6px;margin-bottom:7px}
+.ins-head .ai-mark{color:var(--primary);display:flex}
+.ins-head b{font-size:12px;color:var(--primary-active);letter-spacing:1px}
+.ins-src{font-size:10px;color:var(--hint);margin-left:auto}
+.ins-text{font-size:13.5px;line-height:2;color:var(--text-em);margin:0}
+
+/* 过期标记(预览侧) */
+.pv-flag{
+  position:absolute;top:8px;right:10px;z-index:3;display:inline-flex;align-items:center;gap:4px;
+  height:20px;padding:0 8px;border-radius:100px;font-size:10px;font-weight:600;
+  background:var(--warn-bg);border:1px solid var(--warn-border);color:var(--warn);box-shadow:0 1px 3px rgba(0,0,0,.08);
+}
+button.pv-flag:hover{filter:brightness(.96)}
+.is-stale .stale-dim{opacity:.5;filter:grayscale(.35);transition:opacity .2s}
+/* 中性提示态(unconfigured/dirty,非真正"过期")的区块本身:比过期弱得多的一点视觉区分,不做变灰降级 */
+.pv-block.is-note{opacity:.92}
+
+/* 中性提示(未配置/已修改但非"过期")— 与黄色过期口径区分,不计入顶栏过期数 */
+.pv-note{
+  position:absolute;top:8px;right:10px;z-index:3;display:inline-flex;align-items:center;gap:4px;
+  height:20px;padding:0 8px;border-radius:100px;font-size:10px;font-weight:600;
+  background:var(--bg);border:1px solid var(--divide);color:var(--text-2);box-shadow:0 1px 3px rgba(0,0,0,.08);
+}
+.pv-note.tone-info{background:var(--info-bg);border-color:var(--info-border);color:#00419e}
+button.pv-note:hover{filter:brightness(.96)}
+
+/* hover 提示:此处不可直接编辑,双击定位 */
+.pv-hint{
+  position:absolute;left:14px;bottom:8px;z-index:4;background:var(--text-em);color:#fff;font-size:10px;
+  line-height:14px;padding:3px 9px;border-radius:100px;opacity:0;pointer-events:none;
+  transition:opacity .15s;white-space:nowrap;box-shadow:var(--shadow-panel);
+}
+body:not(.mode-read) .pv-block:hover .pv-hint{opacity:.92}
+
+/* 占位块(仅编辑态) */
+.pv-placeholder{
+  display:flex;align-items:center;gap:10px;border:1.5px dashed var(--outline);border-radius:var(--radius-m);
+  padding:14px 16px;margin:10px 0;color:var(--hint);background:#fbfcfd;
+}
+.pv-placeholder .type-ico{width:28px;height:28px}
+.pv-placeholder b{display:block;font-size:12px;color:var(--text-2)}
+.pv-placeholder span{font-size:11px}
+
+/* 骨架屏 */
+.skel{background:linear-gradient(90deg,#eceff3 25%,#f7f8fa 37%,#eceff3 63%);background-size:400% 100%;animation:shimmer 1.2s infinite;border-radius:3px}
+@keyframes shimmer{0%{background-position:100% 0}100%{background-position:0 0}}
+.skel-table{border:1px solid var(--divide);border-radius:var(--radius-s);overflow:hidden;margin:6px 0}
+.skel-table .sk-row{display:flex;gap:12px;padding:9px 12px;border-bottom:1px solid #eef0f3}
+.skel-table .sk-row:last-child{border-bottom:none}
+.skel-table .sk-row div{height:10px;flex:1}
+.skel-table .sk-head{background:var(--table-head)}
+.skel-line{height:11px;margin:9px 0}
+.skel-note{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--info);margin-top:4px}
+
+/* 右侧空报告 */
+.paper-empty{text-align:center;padding:40px 0 20px;color:var(--hint)}
+.paper-empty .ghost{margin:0 auto;border-radius:3px;background:#f0f2f5}
+.paper-empty p{margin-top:26px;font-size:12px;line-height:20px}
+.paper-empty .g1{width:55%;height:22px;margin-bottom:18px}
+.paper-empty .g2{width:88%;height:10px;margin-bottom:10px}
+.paper-empty .g3{width:80%;height:10px;margin-bottom:10px}
+.paper-empty .g4{width:86%;height:10px;margin-bottom:26px}
+.paper-empty .g5{width:100%;height:110px}
+
+/* 旋转指示 */
+.spin{width:12px;height:12px;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;animation:rot .7s linear infinite;flex:none}
+.spin.teal{border-color:rgba(26,130,127,.25);border-top-color:var(--primary)}
+.spin.blue{border-color:rgba(15,98,254,.2);border-top-color:var(--info)}
+@keyframes rot{to{transform:rotate(360deg)}}
+
+/* ========== 弹窗 ========== */
+.overlay{
+  position:fixed;inset:0;background:rgba(33,39,42,.45);z-index:100;
+  display:flex;align-items:flex-start;justify-content:center;padding-top:12vh;animation:fade-in .15s ease;
+}
+@keyframes fade-in{from{opacity:0}to{opacity:1}}
+.dialog{
+  width:560px;max-width:92vw;background:var(--alt);border-radius:var(--radius-m);box-shadow:var(--shadow-pop);
+  animation:dialog-in .18s ease;overflow:hidden;
+}
+@keyframes dialog-in{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:translateY(0)}}
+.dlg-head{display:flex;align-items:center;padding:14px 18px 0;font-size:14px;font-weight:600;color:var(--text-em)}
+.dlg-head .icon-btn{margin-left:auto}
+.dlg-body{padding:14px 18px 4px}
+.dlg-foot{display:flex;justify-content:flex-end;gap:8px;padding:14px 18px 16px}
+.tpl-row{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
+.tpl-chip{
+  display:inline-flex;align-items:center;gap:4px;height:22px;padding:0 8px;border-radius:100px;font-size:10px;
+  background:var(--bg);border:1px solid var(--divide);color:var(--text-2);transition:all .12s;
+}
+.tpl-chip:hover{border-color:var(--primary);color:var(--primary);background:var(--primary-bg)}
+.tpl-chip code{font-family:var(--mono)}
+.dep-list{margin:8px 0 2px;padding:8px 10px;background:var(--error-bg);border:1px solid var(--error-border);border-radius:var(--radius-s)}
+.dep-list li{list-style:none;display:flex;align-items:center;gap:6px;font-size:12px;color:var(--error);padding:2px 0}
+.btn-danger{background:var(--error);border-color:var(--error);color:#fff}
+.btn-danger:hover:not(:disabled){background:#f04b57;border-color:#f04b57;color:#fff}
+
+/* ========== Toast ========== */
+#toast-root{position:fixed;top:62px;right:18px;z-index:200;display:flex;flex-direction:column;gap:8px;align-items:flex-end}
+.toast{
+  display:flex;align-items:center;gap:8px;background:var(--alt);border:1px solid var(--divide);
+  border-radius:var(--radius-m);box-shadow:var(--shadow-pop);padding:9px 14px;font-size:12px;color:var(--text);
+  animation:toast-in .2s ease;max-width:360px;
+}
+.toast.out{opacity:0;transform:translateX(12px);transition:all .25s}
+@keyframes toast-in{from{opacity:0;transform:translateX(16px)}to{opacity:1;transform:translateX(0)}}
+.toast .t-ico{flex:none;display:flex}
+.toast.success .t-ico{color:var(--success)}
+.toast.warning .t-ico{color:#d9a300}
+.toast.info .t-ico{color:var(--info)}
+.toast .btn-text{flex:none;height:20px}
+
+/* ========== 打印 ========== */
+@media print{
+  body{overflow:visible;background:#fff}
+  #topbar,#editor-pane,.pane-head,#toast-root,.pv-flag,.pv-note{display:none !important}
+  #main{height:auto;display:block}
+  #preview-pane{background:#fff;display:block}
+  #paper-scroll{overflow:visible;padding:0}
+  #paper{box-shadow:none;max-width:100%;padding:24px 8px;border-radius:0}
+  #print-header{display:block;font-size:11px;color:#697077;margin:0 8px 10px;padding-bottom:6px;border-bottom:1px solid #dde1e6}
+  .pv-placeholder,.skel-table,.skel-line,.skel-note,.pv-untouched{display:none !important}
+  .pv-block{cursor:default;box-shadow:none !important;background:none !important}
+  .is-stale .stale-dim{opacity:1;filter:none}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <header id="topbar">
+    <div class="tb-left">
+      <div class="logo">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 12.5V8.8M6 12.5V5.5M10 12.5V8M14 12.5V3.5" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>
+      </div>
+      <div class="tb-titles">
+        <input id="docname" value="未命名报告" spellcheck="false">
+        <div class="tb-sub">智能报告 · 方案 D 双模式分屏 — 编辑的是配置,产出的是干净的报告</div>
+      </div>
+    </div>
+    <div class="tb-right" id="tb-dyn"></div>
+  </header>
+  <main id="main">
+    <section id="editor-pane">
+      <div class="pane-head" id="editor-head"></div>
+      <div id="card-list"></div>
+    </section>
+    <section id="preview-pane">
+      <div class="pane-head" id="preview-head"></div>
+      <div id="paper-scroll"><div id="print-header"></div><div id="paper"></div></div>
+    </section>
+  </main>
+</div>
+<div id="modal-root"></div>
+<div id="toast-root"></div>
+
+<script>
+"use strict";
+/* =====================================================
+ * 智能报告编辑器 · 方案D 双模式分屏
+ * 纯前端模拟:三类卡片 / SQL状态机 / AI脚本与洞见 / 依赖链
+ * ===================================================== */
+
+/* ---------- 工具 ---------- */
+const $ = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+const uid = () => 'c' + Math.random().toString(36).slice(2, 9);
+const pad2 = n => String(n).padStart(2, '0');
+const fmtTime = () => { const d = new Date(); return pad2(d.getHours()) + ':' + pad2(d.getMinutes()); };
+function esc(s){
+  return String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+function mulberry32(seed){
+  let a = seed >>> 0;
+  return function(){
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function strHash(s){ let h = 0; for(let i=0;i<s.length;i++){ h = (h*31 + s.charCodeAt(i)) | 0; } return Math.abs(h); }
+const pickN = (arr, n) => arr[((n % arr.length) + arr.length) % arr.length];
+
+/* ---------- 图标 ---------- */
+const I = {
+  drag:'<svg width="10" height="16" viewBox="0 0 10 16" fill="currentColor"><circle cx="3" cy="3" r="1.4"/><circle cx="7" cy="3" r="1.4"/><circle cx="3" cy="8" r="1.4"/><circle cx="7" cy="8" r="1.4"/><circle cx="3" cy="13" r="1.4"/><circle cx="7" cy="13" r="1.4"/></svg>',
+  text:'<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3.5h10M8 3.5V13M5.5 13h5"/></svg>',
+  db:'<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><ellipse cx="8" cy="3.5" rx="5.5" ry="2.2"/><path d="M2.5 3.5v9c0 1.2 2.5 2.2 5.5 2.2s5.5-1 5.5-2.2v-9M2.5 8c0 1.2 2.5 2.2 5.5 2.2S13.5 9.2 13.5 8"/></svg>',
+  spark:'<svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1.2 9.7 6 14.5 7.8 9.7 9.5 8 14.3 6.3 9.5 1.5 7.8 6.3 6z"/><circle cx="13.2" cy="2.8" r="1.1"/></svg>',
+  trash:'<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2.5 4h11M5.5 4V2.8c0-.4.3-.8.8-.8h3.4c.5 0 .8.4.8.8V4M4 4l.7 9.2c0 .4.4.8.8.8h5c.4 0 .8-.4.8-.8L12 4M6.6 7v4M9.4 7v4"/></svg>',
+  chev:'<svg class="chev" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 6l4 4 4-4"/></svg>',
+  plus:'<svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M8 2.5v11M2.5 8h11"/></svg>',
+  edit:'<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M11.3 2.2 13.8 4.7 5.5 13H3v-2.5zM9.8 3.7l2.5 2.5"/></svg>',
+  refresh:'<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 1.8v2.7h-2.7"/></svg>',
+  play:'<svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor"><path d="M4 2.8v10.4c0 .6.7 1 1.2.7l8.2-5.2c.5-.3.5-1 0-1.3L5.2 2.1c-.5-.3-1.2 0-1.2.7z"/></svg>',
+  warn:'<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M8 2 1.6 13.2h12.8L8 2z" stroke-linejoin="round"/><path d="M8 6.4v3.2M8 11.6v.05"/></svg>',
+  check:'<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6.2"/><path d="M5.2 8.2 7.2 10.2 10.8 6.2"/></svg>',
+  clock:'<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="8" cy="8" r="6.2"/><path d="M8 4.8V8l2.3 1.6"/></svg>',
+  print:'<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 6V2.5h7V6M4.5 11.5H2.8V7c0-.6.4-1 1-1h8.4c.6 0 1 .4 1 1v4.5H11.5M4.5 9.5h7v4h-7z"/></svg>',
+  book:'<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3.5C6.8 2.4 5 2 2.5 2v11c2.5 0 4.3.4 5.5 1.5C9.2 13.4 11 13 13.5 13V2C11 2 9.2 2.4 8 3.5zM8 3.5v11"/></svg>',
+  pen:'<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11.3 2.2 13.8 4.7 5.5 13H3v-2.5z"/></svg>',
+  dbup:'<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><ellipse cx="7" cy="3.3" rx="4.8" ry="1.9"/><path d="M2.2 3.3v8.4c0 1 2.1 1.9 4.8 1.9l.8-.02M11.8 3.3V7"/><path d="M13.2 14v-4.4M11.3 11.4l1.9-1.9 1.9 1.9" stroke-linejoin="round"/></svg>',
+  close:'<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9"/></svg>',
+  link:'<svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M6.5 9.5 9.5 6.5M7.8 4.4l1.5-1.5a2.6 2.6 0 0 1 3.8 3.8L11.6 8.2M8.2 11.6l-1.5 1.5a2.6 2.6 0 0 1-3.8-3.8l1.5-1.5"/></svg>',
+  doc:'<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2.5H6.5a1.5 1.5 0 0 0-1.5 1.5v16a1.5 1.5 0 0 0 1.5 1.5h11a1.5 1.5 0 0 0 1.5-1.5V7.5z"/><path d="M14 2.5V7.5h5M8.5 12h7M8.5 15.5h7M8.5 8.5h2"/></svg>'
+};
+const typeIco = t => t === 'static' ? I.text : (t === 'sql' ? I.db : I.spark);
+const TYPE_NAME = { static:'静态内容', sql:'SQL 动态内容', insight:'AI 智能洞见' };
+
+/* ---------- Mock 数据 ---------- */
+const EVENT_TYPES = ['暴力破解','SQL注入','异常登录','恶意软件','数据外传','端口扫描','钓鱼邮件','权限提升'];
+const IP_PREFIX = ['45.153','185.220','103.56','91.240','172.104','10.20'];
+
+function genEvents(seed){
+  const r = mulberry32(seed);
+  const rows = [];
+  let minutes = Math.floor(r() * 90);
+  for(let i = 0; i < 10; i++){
+    minutes += 40 + Math.floor(r() * 400);
+    const d = new Date(2026, 7, 12, 18, 24);
+    d.setMinutes(d.getMinutes() - minutes);
+    const type = EVENT_TYPES[Math.floor(r() * EVENT_TYPES.length)];
+    const rv = r();
+    const level = rv < 0.3 ? '高危' : (rv < 0.65 ? '中危' : '低危');
+    const sv = r();
+    const status = sv < 0.22 ? '未处置' : (sv < 0.48 ? '处置中' : (sv < 0.88 ? '已处置' : '已忽略'));
+    const ip = IP_PREFIX[Math.floor(r() * IP_PREFIX.length)] + '.' + Math.floor(r()*255) + '.' + Math.floor(r()*255);
+    rows.push({
+      id: 'SEC-' + pad2(d.getMonth()+1) + pad2(d.getDate()) + '-' + (1000 + Math.floor(r()*9000)),
+      time: pad2(d.getMonth()+1) + '-' + pad2(d.getDate()) + ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes()),
+      type, level, ip, status
+    });
+  }
+  return rows;
+}
+function genTrend(seed){
+  const r = mulberry32(seed);
+  const rows = [];
+  for(let i = 0; i < 7; i++){
+    const total = Math.round(22 + i * 3.4 + r() * 10);
+    const high = Math.round(total * (0.16 + r() * 0.14));
+    const handled = Math.round(total * (0.55 + r() * 0.35));
+    rows.push({ date:'08-' + pad2(6 + i), total, high, handled });
+  }
+  return rows;
+}
+function eventStats(rows){
+  const total = rows.length;
+  const high = rows.filter(x => x.level === '高危').length;
+  const mid = rows.filter(x => x.level === '中危').length;
+  const cnt = {};
+  rows.forEach(x => { cnt[x.type] = (cnt[x.type] || 0) + 1; });
+  let topType = '-', topCount = 0;
+  Object.keys(cnt).forEach(k => { if(cnt[k] > topCount){ topCount = cnt[k]; topType = k; } });
+  const open = rows.filter(x => x.status === '未处置' || x.status === '处置中').length;
+  const openHigh = rows.filter(x => (x.status === '未处置' || x.status === '处置中') && x.level === '高危').length;
+  return { total, high, mid, topType, topCount, open, openHigh };
+}
+function trendStats(rows){
+  const first = rows[0].total, last = rows[rows.length - 1].total;
+  const pct = Math.round((last - first) / first * 100);
+  let peak = 0, peakDate = '';
+  rows.forEach(x => { if(x.total > peak){ peak = x.total; peakDate = x.date; } });
+  const sum = rows.reduce((a, x) => a + x.total, 0);
+  const dirWord = pct > 5 ? '呈上升趋势' : (pct < -5 ? '呈回落趋势' : '基本平稳');
+  return { first, last, pct, peak, peakDate, sum, avg: Math.round(sum / rows.length), dirWord };
+}
+
+const SQL_TPL_EVENTS = 'SELECT event_id    AS 事件ID,\n       event_time  AS 发生时间,\n       event_type  AS 事件类型,\n       severity    AS 威胁等级,\n       src_ip      AS 来源IP,\n       status      AS 处置状态\nFROM   security_events\nWHERE  event_time >= NOW() - INTERVAL 7 DAY\nORDER  BY event_time DESC';
+const SQL_TPL_TREND = "SELECT stat_date            AS 日期,\n       total_cnt            AS 事件总数,\n       high_cnt             AS 高危事件,\n       handled_cnt          AS 已处置\nFROM   daily_trend\nWHERE  stat_date >= CURDATE() - INTERVAL 7 DAY\nORDER  BY stat_date";
+
+function queryDataset(q){
+  return (/daily_trend|trend/i.test(q.sql) || /趋势/.test(q.name)) ? 'trend' : 'events';
+}
+
+/* ---------- 全局状态 ---------- */
+const state = {
+  cards: [],
+  mode: 'edit',          // edit | read
+  selectedId: null,
+  dataVersion: 1,        // 「模拟数据源更新」递增
+  docName: '未命名报告',
+  pendingInsights: []    // 刷新上游后自动重新生成的洞见卡 id 队列(允许多张同时排队,互不覆盖)
+};
+let hoverId = null;
+let undoStack = [];      // 每条为 {id, restore(), toastEl},支持多条删除依次撤销
+let lastSavedAt = null;  // 最近一次自动保存时间(Date),null 表示尚未保存过
+/* item5:初始化阶段(恢复持久化内容后)的第一次 renderAll() 不应触发写盘——否则会把
+ * "确实是上次真实保存的时间"用当前时间悄悄覆盖掉,用户会看到明明什么都没编辑,
+ * 保存提示却从「已自动保存 09:14」跳成了刚刚。仅这一次跳过,初始化结束后立即复位,
+ * 此后任何一次真实编辑触发的 renderAll() 都照常写盘。 */
+let booting = true;
+
+const findCard = id => state.cards.find(c => c.id === id);
+const cardIdx = id => state.cards.findIndex(c => c.id === id);
+
+/* ---------- 状态机 ---------- */
+function sqlStatus(c){
+  if(c.previewing) return 'previewing';
+  if(!c.queries.length || !c.script) return 'unconfigured';
+  if(!c.lastPreview) return 'previewable';
+  if(c.configDirty) return 'stale';
+  if(c.lastPreview.version < state.dataVersion) return 'stale';
+  return 'ready';
+}
+function staleReason(c){ return c.configDirty ? 'config' : 'data'; }
+
+function insightRefsInfo(c){
+  const myIdx = cardIdx(c.id);
+  return c.refIds.map(id => {
+    const r = findCard(id);
+    if(!r) return { id, missing:true };
+    return { id, card:r, after: cardIdx(id) > myIdx, status: sqlStatus(r) };
+  });
+}
+function insightStatus(c){
+  if(c.generating) return 'generating';
+  const infos = insightRefsInfo(c);
+  const valid = infos.filter(x => !x.missing);
+  if(!valid.length || !c.prompt.trim()) return 'unconfigured';
+  if(valid.some(x => x.after)) return 'invalid';
+  if(!c.output) return 'generatable';
+  const stale = valid.some(x =>
+    x.status !== 'ready' ||
+    (x.card.lastPreview && c.genTs && x.card.lastPreview.ts > c.genTs)
+  );
+  return stale ? 'stale' : 'done';
+}
+function canGenerateInsight(c){
+  if(!c.prompt.trim()) return { ok:false, reason:'请填写分析提示词' };
+  const infos = insightRefsInfo(c);
+  if(!infos.length) return { ok:false, reason:'请选择至少一张数据卡作为输入' };
+  if(infos.some(x => x.missing)) return { ok:false, reason:'存在已被删除的引用,请重新选择' };
+  if(infos.some(x => x.after)) return { ok:false, reason:'引用的卡片必须位于本卡之前' };
+  const notReady = infos.filter(x => x.status !== 'ready');
+  if(notReady.length) return { ok:false, reason:'引用的数据卡尚未就绪(需先运行取数)', upstream:true };
+  return { ok:true };
+}
+
+const BADGE_TEXT = {
+  unconfigured:'未配置', previewable:'可取数', previewing:'取数中', ready:'已就绪', stale:'已过期',
+  generatable:'待生成', generating:'生成中', done:'已生成', invalid:'引用失效'
+};
+function badgeInner(st){
+  const spin = (st === 'previewing' || st === 'generating') ? '<span class="spin blue" style="width:9px;height:9px;border-width:1.5px"></span>' : '<span class="dot"></span>';
+  return spin + BADGE_TEXT[st];
+}
+function badge(st){
+  return '<span class="badge s-' + st + '">' + badgeInner(st) + '</span>';
+}
+
+/* ---------- AI 生成:pandas 脚本(模拟) ---------- */
+function basisWantsText(basis){ return /总结|概述|文字|一句|说明|结论|描述/.test(basis); }
+function basisWantsTable(basis){ return /表格|明细|列表|趋势|展示|排行/.test(basis) || !basisWantsText(basis); }
+
+function genScriptFor(c){
+  const v = c.scriptVer || 1;
+  const basis = (c.basis || '').trim();
+  const wantsText = basisWantsText(basis);
+  const wantsTable = basisWantsTable(basis);
+  const L = [];
+  L.push('import pandas as pd');
+  L.push('');
+  L.push('# [AI 生成 v' + v + '] 脚本依据:' + (basis || '(未填写)'));
+  const names = [];
+  c.queries.forEach((q, i) => {
+    const dn = c.queries.length > 1 ? 'df_' + (i + 1) : 'df';
+    names.push(dn);
+    const ds = queryDataset(q);
+    L.push('');
+    if(v % 2 === 1){
+      L.push(dn + ' = ctx.query("' + q.name + '")');
+      if(ds === 'events'){
+        L.push(dn + '["发生时间"] = pd.to_datetime(' + dn + '["发生时间"])');
+        L.push(dn + ' = ' + dn + '.sort_values("发生时间", ascending=False)');
+      } else {
+        L.push(dn + ' = ' + dn + '.sort_values("日期").reset_index(drop=True)');
+        L.push(dn + '["处置率"] = (' + dn + '["已处置"] / ' + dn + '["事件总数"]).round(2)');
+      }
+    } else {
+      L.push(dn + ' = (');
+      L.push('    ctx.query("' + q.name + '")');
+      if(ds === 'events'){
+        L.push('      .assign(发生时间=lambda d: pd.to_datetime(d["发生时间"]))');
+        L.push('      .sort_values("发生时间", ascending=False)');
+      } else {
+        L.push('      .sort_values("日期")');
+        L.push('      .assign(处置率=lambda d: (d["已处置"] / d["事件总数"]).round(2))');
+      }
+      L.push('      .reset_index(drop=True)');
+      L.push(')');
+    }
+    if(wantsTable){
+      L.push('render.table(' + dn + (v % 2 === 0 ? '.head(50)' : '') + ', caption="' + q.name + '")');
+    }
+  });
+  if(wantsText && c.queries.length){
+    const dn = names[0];
+    const ds = queryDataset(c.queries[0]);
+    L.push('');
+    L.push('# 文字结论');
+    if(ds === 'events'){
+      L.push('total = len(' + dn + ')');
+      L.push('high  = int((' + dn + '["威胁等级"] == "高危").sum())');
+      L.push('render.text(f"本期共 {total} 起安全事件,其中高危 {high} 起,请重点跟进未处置项。")');
+    } else {
+      L.push('delta = int(' + dn + '["事件总数"].iloc[-1] - ' + dn + '["事件总数"].iloc[0])');
+      L.push('render.text(f"近 7 日事件量变化 {delta:+d} 起,整体走势详见上表。")');
+    }
+  }
+  return L.join('\n');
+}
+
+/* ---------- 快照与文字摘要 ---------- */
+function buildSnapshots(c){
+  c.previewCount = (c.previewCount || 0) + 1;
+  return c.queries.map(q => {
+    const ds = queryDataset(q);
+    const seed = state.dataVersion * 100000 + c.previewCount * 97 + strHash(q.id) % 9973;
+    return { qid: q.id, name: q.name, kind: ds, rows: ds === 'events' ? genEvents(seed) : genTrend(seed) };
+  });
+}
+function textSummaryFor(c){
+  const snaps = c.lastPreview ? c.lastPreview.snapshots : [];
+  for(const s of snaps){
+    if(s.kind === 'events'){
+      const st = eventStats(s.rows);
+      return '本期共 ' + st.total + ' 起安全事件,其中高危 ' + st.high + ' 起、中危 ' + st.mid + ' 起;「' + st.topType + '」最为集中(' + st.topCount + ' 起),仍有 ' + st.open + ' 起未闭环,请重点跟进。';
+    }
+  }
+  for(const s of snaps){
+    if(s.kind === 'trend'){
+      const st = trendStats(s.rows);
+      return '近 7 日累计安全事件 ' + st.sum + ' 起,日均 ' + st.avg + ' 起,整体' + st.dirWord + (st.pct ? '(较期初 ' + (st.pct > 0 ? '+' : '') + st.pct + '%)' : '') + ',峰值出现在 ' + st.peakDate + '(' + st.peak + ' 起)。';
+    }
+  }
+  return '';
+}
+
+/* ---------- AI 洞见(模拟) ---------- */
+/* 解析提示词中的字数约束,如“100个字”“150字以内” */
+function parseWordLimit(prompt){
+  const m = String(prompt || '').match(/(\d{1,4})\s*个?字/);
+  return m ? parseInt(m[1], 10) : null;
+}
+/* 按字数上限收尾,尽量落在句读处,不做生硬截断 */
+function clampToLength(text, limit){
+  if(!limit || text.length <= limit) return text;
+  let cut = text.slice(0, limit);
+  const lastPunct = Math.max(cut.lastIndexOf('。'), cut.lastIndexOf(';'), cut.lastIndexOf(','));
+  if(lastPunct > limit * 0.5) return cut.slice(0, lastPunct + 1);
+  return cut.replace(/[,;、]$/, '') + '…';
+}
+function composeInsight(c){
+  const refs = c.refIds.map(findCard).filter(Boolean);
+  let ev = null, tr = null;
+  refs.forEach(r => {
+    (r.lastPreview ? r.lastPreview.snapshots : []).forEach(s => {
+      if(s.kind === 'events' && !ev) ev = eventStats(s.rows);
+      if(s.kind === 'trend' && !tr) tr = trendStats(s.rows);
+    });
+  });
+  const prompt = c.prompt || '';
+  const limit = parseWordLimit(prompt);
+  if(!ev && !tr){
+    return clampToLength('所引用数据暂未包含可分析的记录,请检查上游查询后重新生成。', limit);
+  }
+  const n = c.genCount || 0;
+  const lead = pickN(['综合本期取数结果,', '从最新数据看,', '整体研判,'], n);
+
+  /* 按提示词中的关键词组织结论结构;未命中任何关键词时,默认输出全部维度 */
+  const wantSummary = /总结|概述|摘要/.test(prompt);
+  const wantTrend = /趋势|变化|走势/.test(prompt);
+  const wantRisk = /风险|隐患|异常/.test(prompt);
+  const wantAdvice = /建议|措施|处置|行动/.test(prompt);
+  const useAll = !(wantSummary || wantTrend || wantRisk || wantAdvice);
+
+  const segments = [];
+  if((useAll || wantSummary || wantTrend) && tr){
+    segments.push(lead + '近 7 日共发生安全事件 ' + tr.sum + ' 起(日均 ' + tr.avg + ' 起),事件量' + tr.dirWord + (tr.pct ? '约 ' + Math.abs(tr.pct) + '%' : '') + ',峰值出现在 ' + tr.peakDate + '(' + tr.peak + ' 起)');
+  }
+  if((useAll || wantSummary || wantRisk) && ev){
+    const pre = segments.length ? '明细层面,' : lead;
+    segments.push(pre + '抽样明细中高危事件 ' + ev.high + ' 起(占 ' + Math.round(ev.high / ev.total * 100) + '%),以「' + ev.topType + '」最为集中(' + ev.topCount + ' 起)');
+    if(ev.open) segments.push('尚有 ' + ev.open + ' 起未完成闭环' + (ev.openHigh ? ',其中高危 ' + ev.openHigh + ' 起' : ''));
+  }
+  let text = segments.join(';');
+  if(text) text += '。';
+
+  if(useAll || wantAdvice || wantRisk){
+    let risk;
+    if(ev){
+      risk = pickN([
+        '最需关注:「' + ev.topType + '」类攻击持续活跃' + (ev.openHigh ? '且存在 ' + ev.openHigh + ' 起未处置高危事件' : '') + ',建议 24 小时内完成处置并复核来源 IP 封禁策略。',
+        '建议优先闭环未处置高危事件,并针对「' + ev.topType + '」加强边界策略与告警收敛。',
+        '风险点集中在「' + ev.topType + '」,建议扩大关联 IP 段封禁范围并在 24 小时内完成高危项复盘。'
+      ], n);
+    } else {
+      risk = '建议持续关注事件量走势,完善告警闭环流程。';
+    }
+    text += risk;
+  }
+  if(!text) text = tr ? (lead + '近 7 日共发生安全事件 ' + tr.sum + ' 起,日均 ' + tr.avg + ' 起。') : '本期暂无可归纳的结论。';
+
+  return clampToLength(text, limit);
+}
+
+/* ---------- 卡片工厂 ---------- */
+const STATIC_PLACEHOLDER_HTML = '<p>在此输入报告文本…</p>';
+function makeCard(type){
+  const base = { id: uid(), type, collapsed: false };
+  if(type === 'static') return Object.assign(base, { title:'文本段落', html: STATIC_PLACEHOLDER_HTML });
+  /* _syncedStatus:「上一次真正同步到 DOM 的 sqlStatus/insightStatus 值」,item1 用它
+   * 兜底捕捉那些不靠 scriptEdited/configDirty/dirty 翻转就能发生的状态迁移(如脚本被清空
+   * 导致 stale→unconfigured)。新卡片的初始状态必然是 unconfigured(无查询/无脚本、
+   * 无引用/无提示词),与 sqlStatus()/insightStatus() 对空卡片的计算结果保持一致。 */
+  if(type === 'sql') return Object.assign(base, {
+    title:'数据内容', queries:[], basis:'', script:'', scriptVer:0, scriptEdited:false,
+    previewing:false, lastPreview:null, configDirty:false, previewCount:0, genScriptBusy:false,
+    pendingScript:null, pendingScriptVer:0, _syncedStatus:'unconfigured'
+  });
+  return Object.assign(base, {
+    title:'智能洞见', refIds:[], prompt:'', output:'', generating:false,
+    genTs:0, genAt:'', genVersion:0, genPrompt:'', genCount:0, dirty:false, brokenNote:'',
+    _syncedStatus:'unconfigured'
+  });
+}
+
+/* ---------- 渲染:顶栏 ---------- */
+/* 「已过期」的统一口径:sql 卡已过期,或洞见卡已过期/引用顺序失效/引用已被删除。
+   staleCount 与 jumpStale 共用同一判定,避免两处口径不一致导致计数与定位对不上。 */
+function isStaleLike(c){
+  if(c.type === 'sql') return sqlStatus(c) === 'stale';
+  if(c.type === 'insight'){
+    const st = insightStatus(c);
+    return st === 'stale' || st === 'invalid' || !!c.brokenNote;
+  }
+  return false;
+}
+function staleCount(){
+  return state.cards.filter(isStaleLike).length;
+}
+function saveHintText(){
+  return lastSavedAt ? ('已自动保存 ' + pad2(lastSavedAt.getHours()) + ':' + pad2(lastSavedAt.getMinutes())) : '尚未保存';
+}
+/* item6:顶栏只在首次构建一次完整 DOM("外壳"),此后 renderTopbar 每次调用只原地 patch
+ * 会变化的那几处(过期计数 chip / 保存提示文案 / 模式高亮 / 数据版本号),不再整体重建
+ * innerHTML——因为 syncCard() 现在会在编辑过程中频繁触发 renderTopbar(),整体重建会把
+ * 顶栏里的按钮换成新节点,没有必要也没有好处。 */
+function tbShellHtml(){
+  return '<button class="btn" data-act="new-blank" title="清空当前内容,开始一份新的空白报告(操作后短暂可撤销)">' +
+      I.doc.replace('width="26" height="26"','width="13" height="13"') + '新建空白报告</button>' +
+    '<div class="tb-divider"></div>' +
+    '<div class="tb-demo" title="以下为原型演示专用控件,用于模拟数据变化 / 快速填充示例内容,不代表真实产品功能">' +
+      '<span class="tb-demo-tag">演示</span>' +
+      '<button class="btn" data-act="sim-update" title="模拟外部数据源发生变化,使已取数内容过期">' + I.dbup + '模拟数据源更新<span class="v-chip" data-role="data-v-chip">数据 v' + state.dataVersion + '</span></button>' +
+      '<button class="btn" data-act="load-example">' + I.doc.replace('width="26" height="26"','width="13" height="13"') + '载入示例报告</button>' +
+    '</div>' +
+    '<div class="tb-divider"></div>' +
+    '<span data-role="stale-chip-slot"></span>' +
+    '<div class="seg">' +
+      '<button class="seg-btn" data-act="mode" data-mode="edit">' + I.pen + '编辑</button>' +
+      '<button class="seg-btn" data-act="mode" data-mode="read">' + I.book + '阅读</button>' +
+    '</div>' +
+    '<span class="tb-save-hint" id="save-hint" title="内容已自动保存到本机浏览器(localStorage),刷新页面后仍在"></span>' +
+    '<div class="tb-divider"></div>' +
+    '<button class="btn" data-act="print" title="调用浏览器打印,另存为 PDF 或直接打印成品">' + I.print + '导出 PDF / 打印</button>';
+}
+function renderTopbar(){
+  const root = $('#tb-dyn');
+  if(!root.dataset.built){
+    root.innerHTML = tbShellHtml();
+    root.dataset.built = '1';
+  }
+  const vchip = root.querySelector('[data-role="data-v-chip"]');
+  if(vchip) vchip.textContent = '数据 v' + state.dataVersion;
+  const sc = staleCount();
+  const slot = root.querySelector('[data-role="stale-chip-slot"]');
+  if(slot){
+    slot.innerHTML = sc ? ('<button class="chip-stale" data-act="jump-stale" title="定位到第一处过期内容">' + I.warn + sc + ' 项内容已过期</button>') : '';
+  }
+  root.querySelectorAll('.seg-btn').forEach(b => b.classList.toggle('on', b.dataset.mode === state.mode));
+  updateSaveHint();
+}
+function updateSaveHint(){
+  const el = $('#save-hint');
+  if(el) el.textContent = saveHintText();
+}
+
+/* ---------- 渲染:左侧 ---------- */
+function insZone(i){
+  return '<div class="ins-zone" data-index="' + i + '">' +
+    '<div class="ins-line"></div>' +
+    '<button class="ins-btn" data-act="ins-open" title="在此插入卡片">' + I.plus + '</button>' +
+    '<div class="ins-menu">' + insMenuItems(i) + '</div>' +
+  '</div>';
+}
+function insMenuItems(i){
+  const item = (t, desc) =>
+    '<button class="ins-item" data-act="ins-add" data-type="' + t + '" data-index="' + i + '">' +
+      '<span class="type-ico t-' + t + '">' + typeIco(t) + '</span>' +
+      '<span><b>' + TYPE_NAME[t] + '</b><span>' + desc + '</span></span>' +
+    '</button>';
+  return item('static','标题、说明等固定富文本') +
+         item('sql','绑定 SQL 查询,AI 生成渲染脚本') +
+         item('insight','引用数据卡,AI 生成分析结论');
+}
+
+function cfgStaticBody(c){
+  const tb = (act, cmd, val, label, title) =>
+    '<button class="rt-btn" data-act="fmt" data-cmd="' + cmd + '" data-val="' + (val || '') + '" title="' + title + '">' + label + '</button>';
+  return '<div class="fld"><label>富文本内容 <span class="fld-hint">在下方直接编辑,右侧实时呈现</span></label>' +
+    '<div class="rt-toolbar">' +
+      tb('fmt','formatBlock','h1','H1','大标题') +
+      tb('fmt','formatBlock','h2','H2','小标题') +
+      tb('fmt','formatBlock','p','正文','正文段落') +
+      '<span class="rt-sep"></span>' +
+      tb('fmt','bold','','<b>B</b>','加粗') +
+      tb('fmt','italic','','<i>I</i>','斜体') +
+      tb('fmt','underline','','<u>U</u>','下划线') +
+      '<span class="rt-sep"></span>' +
+      tb('fmt','insertUnorderedList','','• 列表','无序列表') +
+    '</div>' +
+    '<div class="rich-editor" contenteditable="true" spellcheck="false">' + c.html + '</div></div>';
+}
+
+/* ---------- 局部更新用的小片段生成器 ----------
+ * 下列函数既用于卡片首次渲染,也用于「细粒度局部更新」时重新计算某个节点的内容/可见性——
+ * 二者必须共用同一套函数,否则容易出现初次渲染与后续补丁不一致的问题。 */
+function queryItemHtml(q){
+  return '<div class="q-item" data-qid="' + q.id + '">' +
+    '<span class="q-ico">' + I.db + '</span>' +
+    '<span class="q-name">' + esc(q.name) + '</span>' +
+    '<code class="q-sql">' + esc(q.sql.split('\n')[0]) + '</code>' +
+    '<button class="icon-btn" data-act="q-edit" data-qid="' + q.id + '" title="编辑查询">' + I.edit + '</button>' +
+    '<button class="icon-btn danger" data-act="q-del" data-qid="' + q.id + '" title="移除查询">' + I.close + '</button>' +
+  '</div>';
+}
+function genScriptBtnLabel(c){
+  if(c.genScriptBusy) return '<span class="spin ' + (c.script ? 'teal' : '') + '"></span>AI 生成中…';
+  return I.spark + (c.script ? ' 重新生成脚本' : ' AI 生成脚本');
+}
+function scriptRows(c){
+  const n = c.script ? c.script.split('\n').length + 1 : 3;
+  return Math.min(13, Math.max(3, n));
+}
+function previewBtnLabel(st){
+  if(st === 'previewing') return '<span class="spin"></span>取数中…';
+  if(st === 'ready' || st === 'stale') return I.refresh + ' 重新运行取数';
+  return I.play + ' 运行取数';
+}
+function previewMeta(c){
+  return c.lastPreview
+    ? '上次取数 ' + c.lastPreview.at + ' · 数据 v' + c.lastPreview.version + '<br>每次运行均实时取数'
+    : '每次运行均实时取数';
+}
+function sqlBannerText(c){
+  return staleReason(c) === 'config'
+    ? '配置已变更,当前取数结果与最新配置不一致。'
+    : '数据源已更新至 v' + state.dataVersion + ',当前取数结果基于 v' + (c.lastPreview ? c.lastPreview.version : '?') + ',已过期。';
+}
+function refRowReason(rst, after){
+  if(after) return '位于本卡之后,不可引用';
+  if(rst === 'unconfigured') return '未配置,不可引用';
+  if(rst === 'previewable') return '尚未取数,请先运行取数';
+  if(rst === 'previewing') return '取数中…';
+  if(rst === 'stale') return '已过期,需重新取数';
+  return '';
+}
+function refRowHtml(c, r){
+  const myIdx = cardIdx(c.id), rIdx = cardIdx(r.id);
+  const rst = sqlStatus(r);
+  const checked = c.refIds.includes(r.id);
+  const after = rIdx > myIdx;
+  const reason = refRowReason(rst, after);
+  const disabled = !checked && (after || rst !== 'ready');
+  const cls = 'ref-item' + (checked ? ' is-checked' : '') + (disabled ? ' is-disabled' : '') + ((checked && after) ? ' is-invalid' : '');
+  return '<label class="' + cls + '" title="' + esc(reason) + '">' +
+    '<input type="checkbox" data-refid="' + r.id + '" ' + (checked ? 'checked' : '') + (disabled ? ' disabled' : '') + '>' +
+    '<span class="q-ico" style="color:#00539a;display:flex">' + I.db + '</span>' +
+    '<span class="ref-name" data-ref-name-of="' + r.id + '">' + esc(r.title || '未命名卡片') + '</span>' +
+    badge(rst) +
+    '<span class="ref-reason" style="' + (reason ? '' : 'display:none') + '">' + esc(reason) + '</span>' +
+  '</label>';
+}
+
+function cfgSqlBody(c){
+  const st = sqlStatus(c);
+  let h = '';
+  /* 查询 */
+  h += '<div class="fld"><label>数据查询 <span class="fld-hint">可绑定多个查询到同一张卡</span></label>' +
+    '<div data-role="query-list">' + c.queries.map(queryItemHtml).join('') + '</div>' +
+    '<button class="q-add" data-act="q-new">' + I.plus + '新建 SQL 查询</button></div>';
+  /* 脚本依据 */
+  const canGen = c.queries.length > 0 && c.basis.trim().length > 0 && !c.genScriptBusy;
+  h += '<div class="fld"><label>脚本依据 <span class="fld-hint">自然语言,AI 据此生成 pandas 渲染脚本</span></label>' +
+    '<textarea data-bind="basis" rows="2" placeholder="例:用表格展示安全事件明细,按时间倒序">' + esc(c.basis) + '</textarea>' +
+    '<div class="fld-row">' +
+      '<button class="btn btn-sm ' + (c.script ? '' : 'btn-primary') + '" data-act="gen-script" data-role="gen-script-btn" ' + (canGen ? '' : 'disabled') + '>' + genScriptBtnLabel(c) + '</button>' +
+      '<span class="fld-reason" data-role="gen-script-reason" style="' + ((!canGen && !c.genScriptBusy) ? '' : 'display:none') + '">' + esc(c.queries.length ? '请先填写脚本依据' : '请先绑定查询') + '</span>' +
+      '<span class="mini-tag" data-role="gen-script-tag" style="' + ((c.script && c.scriptEdited) ? '' : 'display:none') + '">已手动编辑</span>' +
+    '</div></div>';
+  /* 脚本(item7:常驻可编辑,允许手写,不再依赖 AI 生成才出现) */
+  /* item5/item3:焦点在脚本框内时收到的 AI 生成结果不会静默写入 state/DOM——常驻这条小
+     提示条,且只有显式点击「应用」才会真正生效(不再有失焦自动应用的路径),避免
+     "取数跑的是看不见的脚本",也避免静默应用覆盖用户挂起期间的手动修改。
+     文案不点名"正在编辑中"这类具体触发原因——pending 是否出现取决于点按钮那一刻
+     焦点是否还停留在脚本框内,这在不同浏览器下的时机不一致(如 Chromium 点按钮会
+     先转移焦点),文案用中性表述只陈述事实,不依赖"何时/为何出现"。 */
+  h += '<div class="banner info" data-role="script-pending" style="' + (c.pendingScript ? '' : 'display:none') + '">' +
+    '<span class="bn-ico">' + I.spark + '</span><div class="bn-body"><span data-role="script-pending-text">AI 已生成新脚本' + (c.pendingScriptVer ? '(v' + c.pendingScriptVer + ')' : '') + ',尚未写入脚本框,点击「应用」后生效。</span>' +
+      '<div class="bn-act"><button class="btn btn-sm btn-primary" data-act="apply-pending-script">' + I.check + ' 应用</button></div></div></div>';
+  h += '<div class="fld"><label>渲染脚本 <span class="fld-hint">Python · pandas,可手写或由 AI 生成后直接编辑</span></label>' +
+    '<textarea class="code" data-bind="script" data-role="script-ta" rows="' + scriptRows(c) + '" spellcheck="false" placeholder="可手写脚本,或点击上方「AI 生成脚本」&#10;可用 API:ctx.query(&#39;查询名&#39;) · render.table(df) · render.text(str)">' + esc(c.script) + '</textarea></div>';
+  /* 过期横幅(常驻节点,display 控制可见性,避免替换节点打断正在进行的点击) */
+  h += '<div class="banner warn" data-role="sql-banner" style="' + (st === 'stale' ? '' : 'display:none') + '">' +
+    '<span class="bn-ico">' + I.warn + '</span><div class="bn-body"><span data-role="sql-banner-text">' + sqlBannerText(c) + '</span>' +
+    '<div class="bn-act"><button class="btn btn-sm btn-primary" data-act="preview">' + I.refresh + ' 重新运行取数</button></div></div></div>';
+  /* 动作区 */
+  const disabled = (st === 'unconfigured' || st === 'previewing');
+  h += '<div class="cfg-actions">' +
+    '<button class="btn btn-sm btn-primary" data-act="preview" data-role="preview-btn" ' + (disabled ? 'disabled' : '') + '>' + previewBtnLabel(st) + '</button>' +
+    '<span class="fld-reason" data-role="preview-reason" style="' + (st === 'unconfigured' ? '' : 'display:none') + '">绑定查询并准备好脚本(AI 生成或手写)后可运行取数</span>' +
+    '<span class="cfg-meta" data-role="preview-meta">' + previewMeta(c) + '</span>' +
+  '</div>';
+  return '<div class="cfg-body">' + h + '</div>';
+}
+
+function cfgInsightBody(c){
+  const st = insightStatus(c);
+  let h = '';
+  /* 引用 */
+  h += '<div class="fld"><label>引用数据卡片 <span class="fld-hint">仅「已就绪」的动态内容可选</span></label>';
+  const sqlCards = state.cards.filter(x => x.type === 'sql');
+  if(!sqlCards.length){
+    h += '<div class="ref-empty">报告中还没有 SQL 动态内容卡,先在上方添加一张吧</div>';
+  } else {
+    h += sqlCards.map(r => refRowHtml(c, r)).join('');
+  }
+  h += '</div>';
+  /* 提示词 */
+  h += '<div class="fld"><label>分析提示词</label>' +
+    '<textarea data-bind="prompt" rows="2" placeholder="例:用100个字总结一下数据,指出最需关注的风险">' + esc(c.prompt) + '</textarea></div>';
+  /* 横幅(四种互斥场景均预先渲染为常驻节点,用 display 切换,避免替换节点打断正在进行的点击) */
+  const gen = canGenerateInsight(c);
+  h += '<div class="banner error" data-role="ib-broken" style="' + (c.brokenNote ? '' : 'display:none') + '">' +
+    '<span class="bn-ico">' + I.warn + '</span><div class="bn-body"><span data-role="ib-broken-text">' + esc(c.brokenNote || '') + '</span>,请重新选择数据来源并重新生成。</div></div>';
+  h += '<div class="banner error" data-role="ib-invalid" style="' + ((st === 'invalid' && !c.brokenNote) ? '' : 'display:none') + '">' +
+    '<span class="bn-ico">' + I.warn + '</span><div class="bn-body">存在位于本卡之后的引用。洞见只能引用其上方的数据卡,请调整卡片顺序或更换引用。</div></div>';
+  h += '<div class="banner warn" data-role="ib-stale" style="' + (st === 'stale' ? '' : 'display:none') + '">' +
+    '<span class="bn-ico">' + I.warn + '</span><div class="bn-body">上游数据卡已更新或过期,当前结论基于旧数据。' +
+      '<div class="bn-act"><button class="btn btn-sm btn-primary" data-role="ib-stale-btn" data-act="' + (gen.ok ? 'gen-insight' : 'refresh-upstream') + '">' + I.refresh + (gen.ok ? ' 重新生成' : ' 刷新上游并重新生成') + '</button></div></div></div>';
+  h += '<div class="banner info" data-role="ib-dirty" style="' + ((st !== 'stale' && c.dirty && c.output && st !== 'generating') ? '' : 'display:none') + '">' +
+    '<span class="bn-ico">' + I.warn + '</span><div class="bn-body">引用或提示词已修改,当前结论可能不匹配,建议重新生成。</div></div>';
+  /* 动作区 */
+  let btnLabel;
+  if(st === 'generating') btnLabel = '<span class="spin"></span>AI 分析中…';
+  else if(c.output) btnLabel = I.spark + ' 重新生成洞见';
+  else btnLabel = I.spark + ' 生成洞见';
+  h += '<div class="cfg-actions">' +
+    '<button class="btn btn-sm btn-primary" data-act="gen-insight" data-role="gen-insight-btn" ' + ((gen.ok && st !== 'generating') ? '' : 'disabled') + '>' + btnLabel + '</button>' +
+    '<span class="fld-reason" data-role="gen-insight-reason" style="' + ((!gen.ok && st !== 'generating') ? '' : 'display:none') + '">' + esc(gen.reason || '') + '</span>' +
+    '<span class="cfg-meta" data-role="gen-insight-meta" style="' + (c.output ? '' : 'display:none') + '">上次生成 ' + (c.genAt || '') + ' · 数据 v' + (c.genVersion || 0) + '</span>' +
+  '</div>';
+  return '<div class="cfg-body">' + h + '</div>';
+}
+
+function cfgSummary(c){
+  if(c.type === 'static'){
+    const t = c.html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+    return t ? t.slice(0, 42) : '(空白文本)';
+  }
+  if(c.type === 'sql') return c.queries.length + ' 个查询 · ' + (c.script ? '脚本已生成' : '未生成脚本');
+  return '引用 ' + c.refIds.length + ' 张数据卡' + (c.output ? ' · 已生成结论' : '');
+}
+
+function cfgCard(c){
+  const sel = state.selectedId === c.id ? ' selected' : '';
+  const col = c.collapsed ? ' collapsed' : '';
+  let bg = '';
+  if(c.type === 'sql') bg = badge(sqlStatus(c));
+  if(c.type === 'insight') bg = badge(insightStatus(c));
+  let body;
+  if(c.collapsed) body = '<div class="cfg-sum">' + esc(cfgSummary(c)) + '</div>';
+  else if(c.type === 'static') body = '<div class="cfg-body">' + cfgStaticBody(c) + '</div>';
+  else if(c.type === 'sql') body = cfgSqlBody(c);
+  else body = cfgInsightBody(c);
+  return '<div class="cfg-card t-' + c.type + sel + col + '" data-card-id="' + c.id + '">' +
+    '<div class="cfg-head">' +
+      '<span class="drag" title="按住拖拽排序">' + I.drag + '</span>' +
+      '<span class="type-ico t-' + c.type + '" title="' + TYPE_NAME[c.type] + '">' + typeIco(c.type) + '</span>' +
+      '<input class="title-input" value="' + esc(c.title) + '" placeholder="卡片名称" spellcheck="false">' +
+      bg +
+      '<button class="icon-btn" data-act="collapse" title="' + (c.collapsed ? '展开配置' : '收起配置') + '">' + I.chev + '</button>' +
+      '<button class="icon-btn danger" data-act="del-card" title="删除卡片">' + I.trash + '</button>' +
+    '</div>' + body +
+  '</div>';
+}
+
+/* =====================================================
+ * 细粒度局部更新(根因修复)
+ * ---------------------------------------------------
+ * 旧实现里 change 事件会用 scheduleRender() 把整卡列表的重建推迟到
+ * "下一次 click 事件结束后"才执行——但这类 change 恰恰是由另一个控件的
+ * mousedown 抢焦点触发的(输入框失焦),也就是说重建会发生在
+ * 该控件 mousedown 与 mouseup 之间。一旦重建把用户正要点击的按钮/复选框
+ * 换成了新的 DOM 节点,浏览器就不会为这次 mousedown+mouseup 合成 click——
+ * 点击/勾选被整个吞掉,这正是上一轮的核心回归。
+ *
+ * 根治方式:input/change 一律不再整卡重建,只在"徽章/横幅/按钮态/提示条"
+ * 这些不会被用户直接点按的节点上做原地属性/文本/display 更新;所有可点击
+ * 控件(按钮、复选框、文本框)在整个交互期间必须是同一个 DOM 引用。
+ * ===================================================== */
+function patchBadge(cardEl, st){
+  const el = cardEl.querySelector('.cfg-head > .badge');
+  if(!el) return;
+  el.className = 'badge s-' + st;
+  el.innerHTML = badgeInner(st);
+}
+function updateGenScriptRow(cardEl, c){
+  const canGen = c.queries.length > 0 && c.basis.trim().length > 0 && !c.genScriptBusy;
+  const btn = cardEl.querySelector('[data-role="gen-script-btn"]');
+  if(btn){
+    btn.disabled = !canGen;
+    btn.classList.toggle('btn-primary', !c.script);
+    btn.innerHTML = genScriptBtnLabel(c);
+  }
+  const reason = cardEl.querySelector('[data-role="gen-script-reason"]');
+  if(reason){
+    const show = !canGen && !c.genScriptBusy;
+    reason.style.display = show ? '' : 'none';
+    reason.textContent = c.queries.length ? '请先填写脚本依据' : '请先绑定查询';
+  }
+  const tag = cardEl.querySelector('[data-role="gen-script-tag"]');
+  if(tag) tag.style.display = (c.script && c.scriptEdited) ? '' : 'none';
+}
+function updateSqlBanner(cardEl, c, st){
+  const banner = cardEl.querySelector('[data-role="sql-banner"]');
+  if(!banner) return;
+  banner.style.display = st === 'stale' ? '' : 'none';
+  if(st === 'stale'){
+    const span = banner.querySelector('[data-role="sql-banner-text"]');
+    if(span) span.textContent = sqlBannerText(c);
+  }
+}
+function updateSqlActions(cardEl, c, st){
+  const disabled = (st === 'unconfigured' || st === 'previewing');
+  const btn = cardEl.querySelector('[data-role="preview-btn"]');
+  if(btn){ btn.disabled = disabled; btn.innerHTML = previewBtnLabel(st); }
+  const reason = cardEl.querySelector('[data-role="preview-reason"]');
+  if(reason) reason.style.display = st === 'unconfigured' ? '' : 'none';
+  const meta = cardEl.querySelector('[data-role="preview-meta"]');
+  if(meta) meta.innerHTML = previewMeta(c);
+}
+/* item5:脚本框上方的"AI 已生成新脚本 · 应用"小条——仅在有待应用脚本时出现,只改这一处的
+ * display/文本,绝不触碰脚本文本框本身的值(那正是它存在的意义:焦点在框内时不静默改值)。 */
+function updateScriptPendingBar(cardEl, c){
+  const bar = cardEl.querySelector('[data-role="script-pending"]');
+  if(!bar) return;
+  const show = !!c.pendingScript;
+  bar.style.display = show ? '' : 'none';
+  if(show){
+    const t = bar.querySelector('[data-role="script-pending-text"]');
+    if(t) t.textContent = 'AI 已生成新脚本' + (c.pendingScriptVer ? '(v' + c.pendingScriptVer + ')' : '') + ',尚未写入脚本框,点击「应用」后生效。';
+  }
+}
+/* SQL 卡:刷新徽章/脚本依据行/待应用脚本条/过期横幅/动作区。不触碰查询列表与脚本文本框的值。 */
+function patchSqlChrome(id){
+  const c = findCard(id);
+  const cardEl = $('#card-list [data-card-id="' + id + '"]');
+  if(!c || !cardEl) return;
+  const st = sqlStatus(c);
+  patchBadge(cardEl, st);
+  if(cardEl.classList.contains('collapsed')){
+    const sum = cardEl.querySelector('.cfg-sum');
+    if(sum) sum.textContent = cfgSummary(c);
+    return;
+  }
+  updateGenScriptRow(cardEl, c);
+  updateScriptPendingBar(cardEl, c);
+  updateSqlBanner(cardEl, c, st);
+  updateSqlActions(cardEl, c, st);
+}
+
+function updateInsightBanners(cardEl, c, st, gen){
+  const broken = cardEl.querySelector('[data-role="ib-broken"]');
+  if(broken){
+    broken.style.display = c.brokenNote ? '' : 'none';
+    const t = broken.querySelector('[data-role="ib-broken-text"]');
+    if(t) t.textContent = c.brokenNote || '';
+  }
+  const invalid = cardEl.querySelector('[data-role="ib-invalid"]');
+  if(invalid) invalid.style.display = (st === 'invalid' && !c.brokenNote) ? '' : 'none';
+  const stale = cardEl.querySelector('[data-role="ib-stale"]');
+  if(stale){
+    stale.style.display = st === 'stale' ? '' : 'none';
+    const btn = stale.querySelector('[data-role="ib-stale-btn"]');
+    if(btn){
+      btn.setAttribute('data-act', gen.ok ? 'gen-insight' : 'refresh-upstream');
+      btn.innerHTML = I.refresh + (gen.ok ? ' 重新生成' : ' 刷新上游并重新生成');
+    }
+  }
+  const dirty = cardEl.querySelector('[data-role="ib-dirty"]');
+  if(dirty) dirty.style.display = (st !== 'stale' && c.dirty && c.output && st !== 'generating') ? '' : 'none';
+}
+function updateGenInsightRow(cardEl, c, st, gen){
+  const btn = cardEl.querySelector('[data-role="gen-insight-btn"]');
+  if(btn){
+    btn.disabled = !(gen.ok && st !== 'generating');
+    if(st === 'generating') btn.innerHTML = '<span class="spin"></span>AI 分析中…';
+    else btn.innerHTML = c.output ? (I.spark + ' 重新生成洞见') : (I.spark + ' 生成洞见');
+  }
+  const reason = cardEl.querySelector('[data-role="gen-insight-reason"]');
+  if(reason){
+    const show = !gen.ok && st !== 'generating';
+    reason.style.display = show ? '' : 'none';
+    if(show) reason.textContent = gen.reason || '';
+  }
+  const meta = cardEl.querySelector('[data-role="gen-insight-meta"]');
+  if(meta){
+    meta.style.display = c.output ? '' : 'none';
+    if(c.output) meta.innerHTML = '上次生成 ' + c.genAt + ' · 数据 v' + c.genVersion;
+  }
+}
+/* 洞见卡:刷新徽章/四类互斥横幅/动作区。不触碰引用列表与提示词文本框的值。 */
+function patchInsightChrome(id){
+  const c = findCard(id);
+  const cardEl = $('#card-list [data-card-id="' + id + '"]');
+  if(!c || !cardEl) return;
+  const st = insightStatus(c);
+  patchBadge(cardEl, st);
+  if(cardEl.classList.contains('collapsed')){
+    const sum = cardEl.querySelector('.cfg-sum');
+    if(sum) sum.textContent = cfgSummary(c);
+    return;
+  }
+  const gen = canGenerateInsight(c);
+  updateInsightBanners(cardEl, c, st, gen);
+  updateGenInsightRow(cardEl, c, st, gen);
+}
+
+/* 跨卡同步:某张 SQL 卡状态变化后,更新"所有"展开中的洞见卡引用列表里对应那一行
+ * (复选框 disabled / 徽章 / 原因文案),但绝不重建整行或整份列表——
+ * 各行是否勾选、是否正被点击均不受影响,不会打断正在进行的勾选操作。 */
+function syncRefRowsFor(sqlId){
+  const sqlCard = findCard(sqlId);
+  if(!sqlCard || sqlCard.type !== 'sql') return;
+  const rst = sqlStatus(sqlCard);
+  state.cards.forEach(ic => {
+    if(ic.type !== 'insight') return;
+    const cardEl = $('#card-list [data-card-id="' + ic.id + '"]');
+    /* 引用行本身只在左侧展开时才存在于 DOM 中,折叠时跳过这一步即可 */
+    if(cardEl && !cardEl.classList.contains('collapsed')){
+      const input = cardEl.querySelector('input[data-refid="' + sqlId + '"]');
+      if(input){
+        const row = input.closest('.ref-item');
+        const after = cardIdx(sqlId) > cardIdx(ic.id);
+        const checked = input.checked;
+        const reason = refRowReason(rst, after);
+        const disabled = !checked && (after || rst !== 'ready');
+        input.disabled = disabled;
+        if(row){
+          row.classList.toggle('is-disabled', disabled);
+          row.classList.toggle('is-invalid', checked && after);
+          row.title = reason;
+          const badgeEl = row.querySelector('.badge');
+          if(badgeEl){ badgeEl.className = 'badge s-' + rst; badgeEl.innerHTML = badgeInner(rst); }
+          const reasonEl = row.querySelector('.ref-reason');
+          if(reasonEl){ reasonEl.style.display = reason ? '' : 'none'; reasonEl.textContent = reason; }
+        }
+      }
+    }
+    /* item4:不管左侧是否折叠,只要这张洞见卡引用了该 SQL 卡,其自身徽章/横幅与
+       右侧成品预览区块都必须跟着刷新——两侧"是否过期"的口径必须保持一致,
+       不能出现左侧已标黄过期、右侧仍是旧的正常展示这种不同步。 */
+    if(ic.refIds.includes(sqlId)){
+      patchInsightChrome(ic.id);
+      rerenderPvBlock(ic.id);
+      ic._syncedStatus = insightStatus(ic); // item1:级联刷新也要跟着更新缓存,否则该洞见卡下一次按键比对会用到过期的基准值
+    }
+  });
+}
+
+/* item2:统一的"某张卡状态变了"出口——任何会改变一张卡 sqlStatus/insightStatus 的路径都
+ * 应该调用这一个函数,而不是各自零散地拼凑"该刷新哪几处"。它保证同一时刻做齐三件事:
+ * ①左侧该卡自己的 chrome(徽章/横幅/按钮态);②右侧成品预览里该卡对应的区块;
+ * ③顶栏的过期计数(以及连带联动——sql 卡还会级联刷新引用了它的洞见卡)。
+ * 三处只要有一处漏掉,就会出现"左侧已经变了,右侧/顶栏还是旧的"这种口径不一致。 */
+function syncCard(id){
+  const c = findCard(id);
+  if(!c) return;
+  if(c.type === 'sql'){
+    patchSqlChrome(id);
+    syncRefRowsFor(id); // 级联刷新引用了这张 sql 卡的洞见卡(它们自己的 chrome + pv-block)
+    c._syncedStatus = sqlStatus(c); // item1:记录这一刻真正同步到 DOM 的状态,供逐击键比对用
+  } else if(c.type === 'insight'){
+    patchInsightChrome(id);
+    c._syncedStatus = insightStatus(c);
+  }
+  rerenderPvBlock(id);
+  renderTopbar();
+}
+
+/* 结构性变化但时机安全(发生在某次 click 自身的同步处理中,不存在"正在进行中的
+ * 另一次点击"会被打断)时,整卡替换是允许的:collapse 切换、查询增删改。 */
+function rerenderCardFull(id){
+  const c = findCard(id);
+  const cardEl = $('#card-list [data-card-id="' + id + '"]');
+  if(!c || !cardEl) return null;
+  const tmp = document.createElement('div');
+  tmp.innerHTML = cfgCard(c);
+  const el = tmp.firstElementChild;
+  cardEl.replaceWith(el);
+  return el;
+}
+
+/* 只替换右侧成品预览中这一张卡对应的区块,不触碰其它卡片、不触碰左侧任何输入框——
+ * 用于异步回调(取数/生成脚本/生成洞见完成)落地时局部刷新成品预览。 */
+function rerenderPvBlock(id){
+  const c = findCard(id);
+  if(!c) return;
+  const old = document.querySelector('#paper [data-card-id="' + id + '"]');
+  const html = pvBlock(c);
+  if(!old){
+    if(html) renderPaper(); // 极端情况(如异步落地时恰好切到阅读模式)兜底整版重绘
+    return;
+  }
+  if(!html){ old.remove(); return; }
+  const tmp = document.createElement('div');
+  tmp.innerHTML = html;
+  old.replaceWith(tmp.firstElementChild);
+}
+
+function renderList(){
+  const el = $('#card-list');
+  const sc = el.scrollTop;
+  if(!state.cards.length){
+    el.innerHTML =
+      '<div class="empty-left">' +
+        '<div class="e-ico">' + I.doc + '</div>' +
+        '<h3>从一张卡片开始</h3>' +
+        '<p>报告由三种卡片顺序组成,左侧编辑配置,<br>右侧即为最终交付的干净成品。</p>' +
+        '<div class="empty-types">' + insMenuItems(0) + '</div>' +
+        '<div class="empty-or">或者</div>' +
+        '<button class="btn btn-primary" data-act="load-example" style="width:100%;justify-content:center;height:32px">' + I.doc.replace('width="26" height="26"','width="14" height="14"') + ' 载入示例报告,体验完整链路</button>' +
+      '</div>';
+    return;
+  }
+  let h = '';
+  state.cards.forEach((c, i) => { h += insZone(i) + cfgCard(c); });
+  h += insZone(state.cards.length);
+  h += '<div class="add-bar">在报告末尾添加:' +
+    '<button class="btn btn-sm" data-act="ins-add" data-type="static" data-index="' + state.cards.length + '">' + I.text + ' 静态</button>' +
+    '<button class="btn btn-sm" data-act="ins-add" data-type="sql" data-index="' + state.cards.length + '">' + I.db + ' SQL</button>' +
+    '<button class="btn btn-sm" data-act="ins-add" data-type="insight" data-index="' + state.cards.length + '">' + I.spark + ' 洞见</button>' +
+  '</div>';
+  el.innerHTML = h;
+  el.scrollTop = sc;
+}
+
+/* ---------- 渲染:右侧成品 ---------- */
+function chipLevel(v){
+  const m = { '高危':'lv-high', '中危':'lv-mid', '低危':'lv-low' };
+  return '<span class="chip ' + (m[v] || 'lv-low') + '">' + v + '</span>';
+}
+function chipStatus(v){
+  const m = { '未处置':'st-open', '处置中':'st-doing', '已处置':'st-done', '已忽略':'st-ignore' };
+  return '<span class="chip ' + (m[v] || 'st-ignore') + '">' + v + '</span>';
+}
+function tableHtml(snap){
+  if(snap.kind === 'events'){
+    return '<table class="rep-table"><thead><tr>' +
+      '<th>事件ID</th><th>发生时间</th><th>事件类型</th><th>威胁等级</th><th>来源IP</th><th>处置状态</th>' +
+      '</tr></thead><tbody>' +
+      snap.rows.map(r =>
+        '<tr><td class="mono">' + r.id + '</td><td class="mono">' + r.time + '</td><td>' + r.type + '</td>' +
+        '<td>' + chipLevel(r.level) + '</td><td class="mono">' + r.ip + '</td><td>' + chipStatus(r.status) + '</td></tr>'
+      ).join('') + '</tbody></table>';
+  }
+  const max = Math.max.apply(null, snap.rows.map(r => r.total));
+  return '<table class="rep-table"><thead><tr>' +
+    '<th>日期</th><th>事件总数</th><th style="text-align:right">高危事件</th><th style="text-align:right">已处置</th><th style="text-align:right">处置率</th>' +
+    '</tr></thead><tbody>' +
+    snap.rows.map(r =>
+      '<tr><td class="mono">' + r.date + '</td>' +
+      '<td><span class="cell-bar"><span class="bar" style="width:' + Math.round(r.total / max * 100) + '%"></span><span>' + r.total + '</span></span></td>' +
+      '<td class="num">' + r.high + '</td><td class="num">' + r.handled + '</td>' +
+      '<td class="num">' + Math.round(r.handled / r.total * 100) + '%</td></tr>'
+    ).join('') + '</tbody></table>';
+}
+function skeletonTable(){
+  let rows = '';
+  /* 骨架屏高度尽量贴近真实取数结果(事件明细固定 10 行),减少"取数完成后表格突然变高"的跳动 */
+  for(let i = 0; i < 10; i++){
+    rows += '<div class="sk-row"><div class="skel"></div><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>';
+  }
+  return '<div class="skel-table"><div class="sk-row sk-head"><div class="skel"></div><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>' + rows + '</div>' +
+    '<div class="skel-note"><span class="spin blue"></span>正在实时取数并执行渲染脚本…</div>';
+}
+function placeholderBlock(c, title, msg){
+  return '<section class="pv-block pv-placeholder' + (state.selectedId === c.id ? ' selected' : '') + '" data-card-id="' + c.id + '">' +
+    '<span class="type-ico t-' + c.type + '">' + typeIco(c.type) + '</span>' +
+    '<span><b>' + esc(title) + '</b><span>' + msg + '</span></span>' +
+  '</section>';
+}
+function staleFlag(c, text){
+  if(state.mode === 'read') return '<span class="pv-flag">' + I.warn + text + '</span>';
+  return '<button class="pv-flag" data-act="goto-card" data-target="' + c.id + '" title="点击定位到左侧配置">' + I.warn + text + '</button>';
+}
+/* 中性提示(item4):unconfigured / dirty 不算"真正过期",用灰/蓝而非黄色过期样式,
+ * 且不计入顶栏 isStaleLike 的过期计数——与右侧视觉口径保持一致。 */
+function noteFlag(c, text, tone){
+  const cls = 'pv-note' + (tone === 'info' ? ' tone-info' : '');
+  if(state.mode === 'read') return '<span class="' + cls + '">' + esc(text) + '</span>';
+  return '<button class="' + cls + '" data-act="goto-card" data-target="' + c.id + '" title="点击定位到左侧配置">' + esc(text) + '</button>';
+}
+/* item2:hover 提示——右侧成品预览只能点选定位,不能直接编辑;静态文本块额外提示可双击编辑 */
+function pvHint(isStatic){
+  if(state.mode === 'read') return '';
+  return '<span class="pv-hint">' + (isStatic ? '点击定位左侧配置 · 双击在左侧编辑' : '点击定位左侧配置,此处不可直接编辑') + '</span>';
+}
+
+function pvBlock(c){
+  const sel = state.selectedId === c.id && state.mode === 'edit' ? ' selected' : '';
+  if(c.type === 'static'){
+    const untouched = c.html === STATIC_PLACEHOLDER_HTML;
+    /* 未修改过的默认占位文本不是真实内容:阅读模式不展示;打印时靠 .pv-untouched 隐藏,兑现"所见即交付" */
+    if(untouched && state.mode === 'read') return '';
+    return '<section class="pv-block' + sel + (untouched ? ' pv-untouched' : '') + '" data-card-id="' + c.id + '" data-dblclick="static">' +
+      pvHint(true) + '<div class="pv-static" data-body-of="' + c.id + '">' + c.html + '</div></section>';
+  }
+  if(c.type === 'sql'){
+    const st = sqlStatus(c);
+    if(st === 'previewing'){
+      return '<section class="pv-block' + sel + '" data-card-id="' + c.id + '">' +
+        '<h3 class="pv-caption"><span data-title-of="' + c.id + '">' + esc(c.title) + '</span></h3>' + skeletonTable() + '</section>';
+    }
+    if(st === 'unconfigured'){
+      if(state.mode === 'read') return '';
+      return placeholderBlock(c, c.title || TYPE_NAME.sql, '未配置 — 在左侧绑定 SQL 查询,并生成或手写渲染脚本');
+    }
+    if(!c.lastPreview){
+      if(state.mode === 'read') return '';
+      return placeholderBlock(c, c.title || TYPE_NAME.sql, '已配置,等待取数 — 点击左侧「运行取数」实时查询');
+    }
+    const lp = c.lastPreview;
+    const hasTable = /render\.table/.test(c.script);
+    const hasText = /render\.text/.test(c.script);
+    let inner = '<h3 class="pv-caption"><span data-title-of="' + c.id + '">' + esc(c.title) + '</span></h3>';
+    if(hasTable){
+      lp.snapshots.forEach(s => {
+        if(c.queries.length > 1) inner += '<div class="pv-qname">' + esc(s.name) + '</div>';
+        inner += tableHtml(s);
+      });
+    }
+    if(hasText){
+      const t = textSummaryFor(c);
+      if(t) inner += '<p class="pv-text">' + esc(t) + '</p>';
+    }
+    if(!hasTable && !hasText){
+      inner += '<p class="pv-text" style="color:var(--hint)">渲染脚本未调用 render.table / render.text,没有产生任何输出。</p>';
+    }
+    inner += '<div class="pv-meta">数据快照 v' + lp.version + ' · 取数于 ' + lp.at + (c.queries.length > 1 ? ' · ' + c.queries.length + ' 个查询' : '') + '</div>';
+    const stale = st === 'stale';
+    return '<section class="pv-block' + sel + (stale ? ' is-stale' : '') + '" data-card-id="' + c.id + '">' +
+      (stale ? staleFlag(c, staleReason(c) === 'config' ? '配置已变更 · 请重新取数' : '数据已过期 · 请重新取数') : pvHint(false)) +
+      '<div class="' + (stale ? 'stale-dim' : '') + '">' + inner + '</div></section>';
+  }
+  /* insight */
+  const st = insightStatus(c);
+  if(st === 'generating'){
+    return '<section class="pv-block' + sel + '" data-card-id="' + c.id + '"><div class="pv-insight-box">' +
+      '<div class="ins-head"><span class="ai-mark">' + I.spark + '</span><b>AI 智能洞见</b></div>' +
+      '<div class="skel skel-line" style="width:96%"></div><div class="skel skel-line" style="width:88%"></div><div class="skel skel-line" style="width:62%"></div>' +
+      '<div class="skel-note"><span class="spin blue"></span>大模型正在基于最新数据生成分析结论…</div>' +
+    '</div></section>';
+  }
+  if(!c.output){
+    if(state.mode === 'read') return '';
+    const msg = st === 'invalid' ? '引用无效 — 洞见只能引用位于其上方的数据卡'
+      : st === 'generatable' ? '已配置,等待生成 — 点击左侧「生成洞见」'
+      : '未配置 — 在左侧选择引用的数据卡并填写提示词';
+    return placeholderBlock(c, c.title || TYPE_NAME.insight, msg);
+  }
+  const refNames = c.refIds.map(id => { const r = findCard(id); return r ? (r.title || '未命名卡片') : null; }).filter(Boolean);
+  /* item4:只有"真正过期/失效"(stale / invalid / brokenNote,与顶栏 isStaleLike 完全同口径)
+   * 才用黄色过期样式并弱化展示;unconfigured(引用或提示词已清空)与 dirty(配置已修改)
+   * 是较温和的中性提示,不计入顶栏过期数,也不做旧内容变灰处理。 */
+  const isExpired = st === 'stale' || st === 'invalid' || !!c.brokenNote;
+  const isUnconfiguredNote = !isExpired && st === 'unconfigured';
+  const isDirtyNote = !isExpired && !isUnconfiguredNote && !!c.dirty;
+  let flagHtml = '';
+  if(isExpired){
+    const flagText = st === 'invalid' ? '引用失效 · 请调整配置'
+      : c.brokenNote ? '引用已删除 · 请重新配置'
+      : '上游已更新 · 请重新生成';
+    flagHtml = staleFlag(c, flagText);
+  } else if(isUnconfiguredNote){
+    flagHtml = noteFlag(c, '引用或提示词已清空 · 结论已不再关联当前配置', 'gray');
+  } else if(isDirtyNote){
+    flagHtml = noteFlag(c, '配置已修改 · 建议重新生成', 'info');
+  } else {
+    flagHtml = pvHint(false);
+  }
+  const sectionCls = isExpired ? ' is-stale' : ((isUnconfiguredNote || isDirtyNote) ? ' is-note' : '');
+  return '<section class="pv-block' + sel + sectionCls + '" data-card-id="' + c.id + '">' +
+    flagHtml +
+    '<div class="' + (isExpired ? 'stale-dim' : '') + '"><div class="pv-insight-box">' +
+      '<div class="ins-head"><span class="ai-mark">' + I.spark + '</span><b>AI 智能洞见</b>' +
+        '<span class="ins-src">' + I.link + ' 基于:<span data-ins-src-of="' + c.id + '">' + esc(refNames.join('、') || '(引用已删除)') + '</span></span></div>' +
+      '<p class="ins-text">' + esc(c.output) + '</p>' +
+      '<div class="pv-meta">生成于 ' + c.genAt + ' · 数据版本 v' + c.genVersion + '</div>' +
+    '</div></div></section>';
+}
+
+function renderPaper(){
+  const wrap = $('#paper-scroll');
+  const sc = wrap.scrollTop;
+  const paper = $('#paper');
+  if(!state.cards.length){
+    paper.innerHTML =
+      '<div class="paper-empty">' +
+        '<div class="ghost g1"></div><div class="ghost g2"></div><div class="ghost g3"></div><div class="ghost g4"></div><div class="ghost g5"></div>' +
+        '<p><b style="color:var(--text-2)">成品预览将在此实时呈现</b><br>左侧添加卡片后立即可见 · 预览即最终交付物,不含任何配置界面</p>' +
+      '</div>';
+    wrap.scrollTop = sc;
+    return;
+  }
+  let h = state.cards.map(pvBlock).join('');
+  if(state.mode === 'read' && !h.trim()){
+    h = '<div class="paper-empty"><p>暂无可阅读的内容 — 切回编辑模式完成配置并运行取数</p></div>';
+  }
+  paper.innerHTML = h;
+  wrap.scrollTop = sc;
+}
+
+function renderHeads(){
+  $('#editor-head').innerHTML =
+    '<b>报告结构</b><span>' + state.cards.length + ' 张卡片</span>' +
+    '<span class="ph-hint">拖拽排序 · 点击卡片与右侧联动</span>';
+  $('#preview-head').innerHTML = state.mode === 'read'
+    ? '<b>阅读模式</b><span>最终交付版式</span><span class="ph-hint">切回编辑模式可继续修改配置</span>'
+    : '<b>成品预览</b><span>所见即交付 · 不含配置界面</span><span class="ph-hint">点击内容块可定位左侧配置</span>';
+}
+
+/* item1:renderAll() 是"整份重画",画面上呈现的必然就是当下最新的 sqlStatus/insightStatus——
+ * 借这个机会把每张卡的 _syncedStatus 缓存一并校准,不然拖拽排序、撤销、模拟数据源更新这些
+ * 不经过 syncCard() 的整卡重渲染路径,会让缓存悄悄落后于画面,下一次逐击键比对就可能用错基准。 */
+function refreshStatusCache(){
+  state.cards.forEach(c => {
+    if(c.type === 'sql') c._syncedStatus = sqlStatus(c);
+    else if(c.type === 'insight') c._syncedStatus = insightStatus(c);
+  });
+}
+function renderAll(){
+  renderTopbar();
+  renderHeads();
+  renderList();
+  renderPaper();
+  syncDocTitle();
+  document.body.classList.toggle('mode-read', state.mode === 'read');
+  refreshStatusCache();
+  if(!booting) schedulePersist(); // item5:见 booting 声明处的注释——初始化这一次不写盘
+}
+
+/* ---------- 真持久化(item6):整份 state 存入 localStorage,刷新页面后仍在 ----------
+ * 细粒度局部更新不会经过 renderAll(),因此在每个会改变可持久化数据的地方
+ * (change/async 回调等)也需要单独调用 schedulePersist()。 */
+const PERSIST_KEY = 'reportEditorD.v1';
+let persistTimer = null;
+function schedulePersist(){
+  clearTimeout(persistTimer);
+  persistTimer = setTimeout(doPersist, 500);
+}
+/* item3:previewing/generating/genScriptBusy/pendingScript 都只是"异步操作进行中"的瞬时标记,
+ * 唯一负责把它们复位回稳定态的是对应 setTimeout 的回调。一旦离开了那个回调还能触发的场景——
+ * 页面被刷新(回调随页面一起消失)、或卡片在异步进行中被删除又被撤销恢复(原回调届时已经
+ * 因为找不到卡片而提前退出、不会再有第二次机会复位)——这些标记就会永远卡住,界面上表现为
+ * "取数中/生成中"转不动。因此:写入 localStorage 前、以及删除卡片存入撤销快照前,都必须
+ * 统一把这些临时态降级为稳定态。 */
+const TRANSIENT_FLAGS = ['previewing', 'generating', 'genScriptBusy'];
+function sanitizeCardInPlace(c){
+  if(!c) return c;
+  TRANSIENT_FLAGS.forEach(k => { if(k in c) c[k] = false; });
+  if('pendingScript' in c){ c.pendingScript = null; c.pendingScriptVer = null; }
+  return c;
+}
+function sanitizeCardCopy(c){
+  return sanitizeCardInPlace(Object.assign({}, c));
+}
+function doPersist(){
+  try{
+    /* 用浅拷贝清洗后再写盘——绝不直接修改 state.cards 里的活对象,避免把一个
+       真正正在进行中的异步操作(比如取数确实还没跑完)误当成"已中断"而提前复位。 */
+    const cleanCards = state.cards.map(sanitizeCardCopy);
+    const payload = { v:1, docName: state.docName, dataVersion: state.dataVersion, savedAt: Date.now(), cards: cleanCards };
+    localStorage.setItem(PERSIST_KEY, JSON.stringify(payload));
+    lastSavedAt = new Date();
+    updateSaveHint();
+  } catch(err){ /* 隐私模式 / 存储配额已满等场景下静默失败,不影响正常编辑 */ }
+}
+/* 返回值:false=无可恢复内容;true=正常恢复;'stuck'=恢复成功但清洗到了残留的中断态
+ * (用于初始化时额外提示用户"已重置为可重新操作")。 */
+/* item5:仅校验"是不是数组、有没有长度"太浅——卡片对象缺字段(如 sql 卡没有 queries
+ * 数组)不会在这一步报错,而是要等到 state.cards 已被替换、renderAll() 渲染到那张
+ * 具体卡片时才炸出 TypeError(如 c.queries.length)。那次崩溃发生在 loadPersisted()
+ * 之外、整个初始化流程又没有更外层的保护,会直接白屏。因此在写入 state 之前,先对
+ * 每张卡片做最小限度的结构校验;任何一张不达标就把整份 payload 当作损坏数据整体丢弃,
+ * 安全地退回空状态,而不是带着半成形的卡片去赌后面的渲染不会崩。 */
+const VALID_CARD_TYPES = { static:1, sql:1, insight:1 };
+function isPersistedCardShapeOk(c){
+  if(!c || typeof c !== 'object') return false;
+  if(typeof c.id !== 'string' || !VALID_CARD_TYPES[c.type]) return false;
+  if(c.type === 'sql' && !Array.isArray(c.queries)) return false;
+  if(c.type === 'insight' && !Array.isArray(c.refIds)) return false;
+  return true;
+}
+function loadPersisted(){
+  try{
+    const raw = localStorage.getItem(PERSIST_KEY);
+    if(!raw) return false;
+    const payload = JSON.parse(raw);
+    if(!payload || typeof payload !== 'object' || !Array.isArray(payload.cards) || !payload.cards.length) return false;
+    if(!payload.cards.every(isPersistedCardShapeOk)) return false;
+    /* item5:走到这里只说明 id/type/queries/refIds 这几个字段合法,basis/script/html/
+     * prompt 等字段仍可能整个缺失(旧版本数据、外部注入的半成形 payload 等)——用
+     * makeCard(type) 的默认值兜底归一化补齐,避免下游渲染时对 undefined 调用
+     * .trim()/.replace() 等方法而抛 TypeError。Object.assign 以 c 的字段为准覆盖
+     * 默认值,因此已有的真实数据(包括 id)不受影响,只补缺。 */
+    const normalizedCards = payload.cards.map(c => Object.assign(makeCard(c.type), c));
+    let hadStuck = false;
+    normalizedCards.forEach(c => {
+      if(c.previewing || c.generating || c.genScriptBusy || c.pendingScript){
+        hadStuck = true;
+        sanitizeCardInPlace(c);
+      }
+    });
+    state.cards = normalizedCards;
+    state.docName = typeof payload.docName === 'string' && payload.docName ? payload.docName : state.docName;
+    state.dataVersion = typeof payload.dataVersion === 'number' && payload.dataVersion > 0 ? payload.dataVersion : 1;
+    /* 保存提示应反映"确实曾经保存过"这一事实,而不是等下一次编辑触发新的 500ms
+       防抖保存才显示——否则会出现"内容明明是恢复回来的,保存提示却写着尚未保存"的矛盾。 */
+    lastSavedAt = payload.savedAt ? new Date(payload.savedAt) : new Date();
+    /* #docname 是顶栏里独立于 renderAll() 渲染范围之外的输入框,不手动同步其 value
+       的话,恢复后的文档名只会体现在 state / 标签页标题上,输入框本身仍显示旧的
+       硬编码占位值——两处显示不一致。 */
+    const nameEl = $('#docname');
+    if(nameEl) nameEl.value = state.docName;
+    return hadStuck ? 'stuck' : true;
+  } catch(err){ return false; }
+}
+
+/* ---------- 联动 ---------- */
+function setHover(id){
+  if(hoverId === id) return;
+  $$('.peer-hover').forEach(n => n.classList.remove('peer-hover'));
+  hoverId = id;
+  if(!id || state.mode === 'read') return;
+  $$('[data-card-id="' + id + '"]').forEach(n => n.classList.add('peer-hover'));
+}
+/* 卡片重命名即时同步:左侧洞见卡的引用列表名称 + 右侧洞见预览的「基于:」标注(不做整体重渲染) */
+function syncCardTitleRefs(c){
+  if(c.type !== 'sql') return;
+  const label = c.title || '未命名卡片';
+  $$('.ref-name[data-ref-name-of="' + c.id + '"]').forEach(n => { n.textContent = label; });
+  state.cards.forEach(ic => {
+    if(ic.type === 'insight' && ic.refIds.includes(c.id)){
+      const el = $('[data-ins-src-of="' + ic.id + '"]');
+      if(el){
+        const names = ic.refIds.map(id => { const r = findCard(id); return r ? (r.title || '未命名卡片') : null; }).filter(Boolean);
+        el.textContent = names.join('、') || '(引用已删除)';
+      }
+    }
+  });
+}
+/* 顶栏文档名同步到浏览器标签页标题与打印页眉 */
+function syncDocTitle(){
+  const name = (state.docName || '').trim() || '未命名报告';
+  document.title = name + ' · 智能报告编辑器';
+  const ph = $('#print-header');
+  if(ph) ph.textContent = name;
+}
+/* 短暂闪烁高亮某个 DOM 节点,不改变选中态、不触发滚动——用于"完成了但不该抢用户当前焦点/滚动位置"的场景 */
+function flashEl(el){
+  if(!el) return;
+  el.classList.remove('flash');
+  void el.offsetWidth;
+  el.classList.add('flash');
+  setTimeout(() => el.classList.remove('flash'), 1000);
+}
+/* item6:洞见生成完成后只在右侧成品预览里对应区块闪一下提示"这里更新了",不抢用户当前的
+ * 选中态与滚动位置(区别于 selectCard 的"跳转定位"语义)。 */
+function flashPvBlock(id){
+  flashEl($('#paper [data-card-id="' + id + '"]'));
+}
+function selectCard(id, source){
+  state.selectedId = id;
+  $$('.cfg-card.selected, .pv-block.selected').forEach(n => n.classList.remove('selected'));
+  $$('[data-card-id="' + id + '"]').forEach(n => n.classList.add('selected'));
+  if(source === 'left' || source === 'both'){
+    const pv = $('#paper [data-card-id="' + id + '"]');
+    if(pv){ pv.scrollIntoView({ behavior:'smooth', block:'nearest' }); flashEl(pv); }
+  }
+  if(source === 'right' || source === 'both'){
+    const cf = $('#card-list [data-card-id="' + id + '"]');
+    if(cf){ cf.scrollIntoView({ behavior:'smooth', block:'nearest' }); flashEl(cf); }
+  }
+}
+
+/* ---------- 动作 ---------- */
+function addCard(type, index){
+  const c = makeCard(type);
+  state.cards.splice(index, 0, c);
+  renderAll();
+  selectCard(c.id, 'both');
+  toast('已插入「' + TYPE_NAME[type] + '」卡片', 'success');
+}
+
+/* ---------- 删除与撤销(item9:支持多条依次撤销,每个 toast 持有自己的快照) ---------- */
+function requestDelete(id){
+  const c = findCard(id);
+  if(!c) return;
+  const deps = state.cards.filter(x => x.type === 'insight' && x.refIds.includes(id));
+  if(c.type === 'sql' && deps.length){
+    openConfirm({
+      title:'删除被引用的数据卡?',
+      body:'<p style="font-size:12px;line-height:19px">「<b>' + esc(c.title) + '</b>」正被以下洞见卡引用,删除后这些洞见将失去数据来源:</p>' +
+        '<ul class="dep-list">' + deps.map(d => '<li>' + I.spark + esc(d.title || '未命名洞见') + '</li>').join('') + '</ul>' +
+        '<p style="font-size:11px;color:var(--hint);margin-top:6px">删除后,相关洞见卡会被标记为「引用已删除」,需重新配置;此操作同样可以撤销。</p>',
+      okText:'仍要删除', danger:true,
+      onOk(){
+        const brokenRefs = deps.map(d => ({
+          insightId: d.id, prevRefIds: d.refIds.slice(), prevBrokenNote: d.brokenNote, prevDirty: d.dirty
+        }));
+        deps.forEach(d => {
+          d.refIds = d.refIds.filter(x => x !== id);
+          d.brokenNote = '引用的「' + (c.title || '未命名卡片') + '」已被删除';
+          d.dirty = true;
+        });
+        doDelete(id, brokenRefs);
+      }
+    });
+    return;
+  }
+  doDelete(id, []);
+}
+function doDelete(id, brokenRefs){
+  const i = cardIdx(id);
+  if(i < 0) return;
+  const card = state.cards[i];
+  state.cards.splice(i, 1);
+  state.pendingInsights = state.pendingInsights.filter(pid => pid !== id);
+  if(state.selectedId === id) state.selectedId = null;
+  /* item3:卡片被删除时若正处于取数中/生成中,原本负责复位这些临时态的 setTimeout 回调
+   * 稍后会因为 findCard 找不到卡片而提前退出——如果此后又被撤销恢复,卡片就会带着永远
+   * 转不动的"取数中"之类状态复活。删除时先清洗掉这些临时态,撤销快照永远是干净的。 */
+  sanitizeCardInPlace(card);
+  renderAll();
+  pushUndo(card, i, brokenRefs || []);
+}
+/* 每条撤销记录持有自己独立的快照(卡片本体 + 受影响洞见卡的引用/脏标/失效文案),
+ * 多次删除会各自入栈,互不覆盖;通过 toast 上的 data-undo-id 精确关联到某一条。 */
+function pushUndo(card, index, brokenRefs){
+  const entry = { id: card.id, undoId: card.id + '-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6) };
+  entry.restore = () => {
+    state.cards.splice(Math.min(index, state.cards.length), 0, card);
+    brokenRefs.forEach(r => {
+      const ic = findCard(r.insightId);
+      if(ic){ ic.refIds = r.prevRefIds; ic.brokenNote = r.prevBrokenNote; ic.dirty = r.prevDirty; }
+    });
+    renderAll();
+    selectCard(card.id, 'both');
+    toast('已恢复卡片' + (brokenRefs.length ? '及相关洞见的引用' : ''), 'success');
+  };
+  undoStack.push(entry);
+  toast(
+    '已删除「' + esc(card.title || TYPE_NAME[card.type]) + '」' + (brokenRefs.length ? ',相关洞见卡已标记为引用失效' : ''),
+    brokenRefs.length ? 'warning' : 'info',
+    { label:'撤销', act:'undo-del', undoId: entry.undoId }
+  );
+}
+/* 按 toast 上的 undoId 精确恢复对应快照;找不到(已被恢复/已过期被清理)则安全地什么都不做,
+ * 相当于对索引做了钳制,不会误恢复到别的快照。 */
+function undoByToastId(undoId){
+  if(!undoId) return;
+  const idx = undoStack.findIndex(e => e.undoId === undoId);
+  if(idx < 0) return;
+  const entry = undoStack[idx];
+  undoStack.splice(idx, 1);
+  entry.restore();
+}
+
+/* ---------- 异步回调(item1):只重建自己那张卡的相关区域 + 该卡在成品预览中的区块;
+ * 不做整表/整卡列表重建,天然不会打断用户在其它卡片中的输入焦点与光标。 ---------- */
+function runGenScript(id){
+  const c = findCard(id);
+  if(!c || c.genScriptBusy) return;
+  if(!c.queries.length || !c.basis.trim()) return;
+  c.genScriptBusy = true;
+  patchSqlChrome(id);
+  setTimeout(() => {
+    const cc = findCard(id);
+    if(!cc) return;
+    cc.genScriptBusy = false;
+    /* item5/item3:若此刻用户焦点正在这张卡的脚本框内,说明她可能正在手写/查看脚本——
+     * 不静默把 state.script 换成 AI 结果(那会让"当前运行取数实际执行的脚本"与
+     * "脚本框里肉眼可见的内容"分叉)。先把新脚本存进 pendingScript,展示一条
+     * 小提示条,只有用户显式点击「应用」才会真正落地——不再有失焦自动应用的路径。 */
+    const cardEl = $('#card-list [data-card-id="' + id + '"]');
+    const ta = cardEl ? cardEl.querySelector('[data-role="script-ta"]') : null;
+    const focused = !!(ta && document.activeElement === ta);
+    const prevVer = cc.scriptVer || 0;
+    cc.scriptVer = prevVer + 1; // genScriptFor 依据 scriptVer 决定奇偶写法风格,需要先算出下一版本
+    const generated = genScriptFor(cc);
+    if(focused){
+      cc.scriptVer = prevVer; // 尚未真正应用,版本号先回退,避免"没应用却已经+1"的错觉
+      cc.pendingScript = generated;
+      cc.pendingScriptVer = prevVer + 1;
+    } else {
+      cc.script = generated;
+      cc.scriptEdited = false;
+      if(cc.lastPreview) cc.configDirty = true;
+      cc.pendingScript = null;
+      cc.pendingScriptVer = null;
+    }
+    applyScriptToDom(cc);
+    syncCard(id);
+    schedulePersist();
+    toast(focused
+      ? 'AI 已生成新脚本,脚本框上方点击「应用」后生效'
+      : 'AI 已生成渲染脚本(v' + cc.scriptVer + ')' + (cc.lastPreview ? ',请重新取数' : ''),
+      'success');
+  }, 700);
+}
+/* 把新脚本写回脚本文本框的 value——若用户此刻恰好正在这个文本框里输入,
+ * 则跳过覆盖,避免打断输入 / 冲掉正在敲的内容。
+ * force=true 时无条件回写(用于「应用」这类用户显式授权的路径),此时不应再受
+ * 焦点是否停留在文本框内这一条件限制——否则会出现"state 已经换成 AI 脚本、
+ * 文本框却仍显示手改版"的分叉,而这恰恰是用户点「应用」想要的结果。 */
+function applyScriptToDom(c, force){
+  const cardEl = $('#card-list [data-card-id="' + c.id + '"]');
+  if(!cardEl) return;
+  const ta = cardEl.querySelector('[data-role="script-ta"]');
+  if(!ta) return;
+  if(force || document.activeElement !== ta) ta.value = c.script;
+  ta.rows = scriptRows(c);
+}
+/* item3:应用脚本框上方暂存的 AI 生成结果——现在只在用户显式点击「应用」时调用
+ * (不再有 focusout 自动应用的路径),调用方自行决定是否需要先弹确认。点「应用」
+ * 本身就是显式授权,因此这里必须强制回写文本框(force=true),焦点守卫只留给
+ * runGenScript 的自动路径。 */
+function applyPendingScript(c){
+  if(!c || !c.pendingScript) return;
+  c.script = c.pendingScript;
+  if(c.pendingScriptVer) c.scriptVer = c.pendingScriptVer;
+  c.scriptEdited = false;
+  if(c.lastPreview) c.configDirty = true;
+  c.pendingScript = null;
+  c.pendingScriptVer = null;
+  applyScriptToDom(c, true);
+  schedulePersist();
+}
+/* item3:点击脚本框上方「应用」按钮的入口——若挂起期间用户已经在脚本框里手改过内容
+ * (c.scriptEdited),应用会静默覆盖那些手动修改,先弹确认再决定是否继续。 */
+function requestApplyPendingScript(cid){
+  const c = findCard(cid);
+  if(!c || !c.pendingScript) return;
+  const doApply = () => {
+    const ver = c.pendingScriptVer || c.scriptVer;
+    applyPendingScript(c);
+    syncCard(cid);
+    toast('已应用 AI 生成的脚本(v' + ver + ')' + (c.lastPreview ? ',请重新取数' : ''), 'success');
+  };
+  if(c.scriptEdited){
+    openConfirm({
+      title:'应用 AI 生成的脚本?',
+      body:'<p style="font-size:12px;line-height:19px">脚本框内当前有<b>手动修改</b>,应用 AI 生成结果将<b>覆盖</b>这些修改,且无法撤销,请确认。</p>',
+      okText:'仍要应用', danger:true,
+      onOk(){ doApply(); }
+    });
+  } else {
+    doApply();
+  }
+}
+/* item3:点击「AI 生成脚本 / 重新生成脚本」按钮的入口——依次检查两类会被覆盖的内容:
+ * ①还没应用的 pending 结果(先问是否放弃);②脚本框里已有的手动修改(再问是否覆盖)。
+ * 两种情况可能同时存在,因此在第一层确认的 onOk 里再决定要不要接着弹第二层。 */
+function requestGenScript(cid){
+  const c = findCard(cid);
+  if(!c) return;
+  const proceedAfterPendingHandled = () => {
+    if(c.script && c.scriptEdited){
+      openConfirm({
+        title:'重新生成脚本?',
+        body:'<p style="font-size:12px;line-height:19px">当前脚本包含<b>手动修改</b>,重新生成将<b>覆盖</b>这些修改,且无法撤销,请确认。</p>',
+        okText:'仍要重新生成', danger:true,
+        onOk(){ runGenScript(cid); }
+      });
+    } else {
+      runGenScript(cid);
+    }
+  };
+  if(c.pendingScript){
+    openConfirm({
+      title:'放弃待应用的脚本?',
+      body:'<p style="font-size:12px;line-height:19px">当前有一份 AI 已生成但尚未应用的脚本,重新生成将<b>放弃</b>它,且无法撤销,请确认。</p>',
+      okText:'放弃并重新生成', danger:true,
+      onOk(){
+        c.pendingScript = null;
+        c.pendingScriptVer = null;
+        syncCard(cid);
+        schedulePersist();
+        proceedAfterPendingHandled();
+      }
+    });
+  } else {
+    proceedAfterPendingHandled();
+  }
+}
+
+function runPreview(id){
+  const c = findCard(id);
+  if(!c || c.previewing) return;
+  if(sqlStatus(c) === 'unconfigured') return;
+  c.previewing = true;
+  syncCard(id);
+  setTimeout(() => {
+    const cc = findCard(id);
+    if(!cc) return;
+    cc.previewing = false;
+    cc.lastPreview = { version: state.dataVersion, ts: Date.now(), at: fmtTime(), snapshots: buildSnapshots(cc) };
+    cc.configDirty = false;
+    syncCard(id);
+    schedulePersist();
+    toast('「' + esc(cc.title) + '」取数完成 · 数据 v' + state.dataVersion, 'success');
+    maybeRunPendingInsight();
+  }, 800);
+}
+
+function runGenInsight(id){
+  const c = findCard(id);
+  if(!c || c.generating) return;
+  const gate = canGenerateInsight(c);
+  if(!gate.ok) return;
+  c.generating = true;
+  syncCard(id);
+  setTimeout(() => {
+    const cc = findCard(id);
+    if(!cc) return;
+    cc.generating = false;
+    cc.genCount = (cc.genCount || 0) + 1;
+    cc.output = composeInsight(cc);
+    cc.genTs = Date.now();
+    cc.genAt = fmtTime();
+    cc.genVersion = state.dataVersion;
+    cc.genPrompt = cc.prompt;
+    cc.dirty = false;
+    cc.brokenNote = '';
+    syncCard(id);
+    schedulePersist();
+    /* item6:生成完成不再 selectCard 抢用户当前的选中/滚动位置——只用 toast + 目标
+     * pv-block 短暂闪烁提示"这里更新了"。flashPvBlock 必须在 syncCard(id) 之后调用,
+     * 因为 rerenderPvBlock 已经把该卡对应的 DOM 节点整个替换成了新引用。 */
+    flashPvBlock(id);
+    toast('洞见已生成 · 基于数据 v' + cc.genVersion, 'success');
+  }, 1200);
+}
+
+/* item9:pendingInsights 是队列而非单值,多张洞见卡同时等待上游刷新时互不覆盖 */
+function refreshUpstream(id){
+  const c = findCard(id);
+  if(!c) return;
+  const targets = c.refIds.map(findCard).filter(r => r && sqlStatus(r) !== 'ready' && sqlStatus(r) !== 'unconfigured');
+  if(!targets.length){
+    toast('上游数据卡未配置或不可刷新,请先在上游完成配置', 'warning');
+    return;
+  }
+  if(!state.pendingInsights.includes(id)) state.pendingInsights.push(id);
+  toast('正在刷新 ' + targets.length + ' 张上游数据卡…', 'info');
+  targets.forEach(t => runPreview(t.id));
+}
+function maybeRunPendingInsight(){
+  if(!state.pendingInsights.length) return;
+  const queue = state.pendingInsights;
+  state.pendingInsights = [];
+  queue.forEach(id => {
+    const c = findCard(id);
+    if(!c) return; // 目标洞见卡已被删除,跳过这一条,不影响队列中其它条目
+    const gate = canGenerateInsight(c);
+    if(gate.ok){ runGenInsight(id); return; }
+    /* 上游还没全部结束:重新排回队列,等下一张上游卡取数完成后再检查 */
+    const stillRunning = c.refIds.map(findCard).some(r => r && r.previewing);
+    if(stillRunning){
+      if(!state.pendingInsights.includes(id)) state.pendingInsights.push(id);
+    } else {
+      toast('已停止自动刷新「' + esc(c.title || TYPE_NAME.insight) + '」:' + gate.reason, 'warning');
+    }
+  });
+}
+
+function simulateDataUpdate(){
+  state.dataVersion++;
+  let affected = 0;
+  state.cards.forEach(c => {
+    if(c.type === 'sql' && c.lastPreview && c.lastPreview.version < state.dataVersion) affected++;
+  });
+  renderAll();
+  if(affected){
+    toast('数据源已更新至 v' + state.dataVersion + ',' + affected + ' 张数据卡的取数结果已过期', 'warning');
+  } else {
+    toast('数据源已更新至 v' + state.dataVersion + '(当前没有受影响的取数结果)', 'info');
+  }
+}
+
+function jumpStale(){
+  const c = state.cards.find(isStaleLike);
+  if(c){
+    if(state.mode === 'read'){ state.mode = 'edit'; renderAll(); }
+    selectCard(c.id, 'both');
+  }
+}
+
+/* ---------- 新建空白报告(item7) ---------- */
+function requestNewBlankReport(){
+  if(!state.cards.length){
+    toast('当前已是空白报告', 'info');
+    return;
+  }
+  openConfirm({
+    title:'新建空白报告?',
+    body:'<p style="font-size:12px;line-height:19px">将清空当前画布上的全部 <b>' + state.cards.length + '</b> 张卡片,并把文档名重置为「未命名报告」。</p>' +
+      '<p style="font-size:11px;color:var(--hint);margin-top:6px">操作完成后会出现一条可撤销的提示,点击其中的「撤销」按钮即可恢复;该提示消失后将无法再撤销,请确认。</p>',
+    okText:'新建空白报告', danger:true,
+    onOk(){ doNewBlankReport(); }
+  });
+}
+function doNewBlankReport(){
+  const prevCards = state.cards;
+  const prevName = state.docName;
+  const prevVersion = state.dataVersion;
+  const prevPending = state.pendingInsights;
+  const prevSelected = state.selectedId;
+  undoStack = []; // 避免之前的"撤销删除"快照把旧卡插回刚新建的空白报告
+  /* 与 doDelete 同理:快照里的卡片若正处于取数中/生成中,原本负责复位的 setTimeout
+     回调马上会因为 findCard 找不到卡片而提前退出——若不在此清洗,撤销恢复后卡片会
+     带着永远转不动的"取数中"复活。 */
+  prevCards.forEach(sanitizeCardInPlace);
+  state.cards = [];
+  state.docName = '未命名报告';
+  state.selectedId = null;
+  state.pendingInsights = [];
+  const nameEl = $('#docname');
+  if(nameEl) nameEl.value = state.docName;
+  renderAll();
+  const undoId = 'newblank-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6);
+  undoStack.push({
+    id:'__newblank__', undoId,
+    restore(){
+      state.cards = prevCards;
+      state.docName = prevName;
+      state.dataVersion = prevVersion;
+      state.pendingInsights = prevPending;
+      state.selectedId = prevSelected;
+      const ne = $('#docname');
+      if(ne) ne.value = state.docName;
+      renderAll();
+      toast('已恢复原内容', 'success');
+    }
+  });
+  toast('已新建空白报告', 'info', { label:'撤销', act:'undo-del', undoId });
+}
+
+/* ---------- 示例报告 ---------- */
+function requestLoadExample(){
+  if(state.cards.length){
+    openConfirm({
+      title:'载入示例报告?',
+      body:'<p style="font-size:12px;line-height:19px">当前画布已有 <b>' + state.cards.length + '</b> 张卡片,载入示例报告将<b>覆盖全部现有内容</b>,且无法撤销,请确认。</p>',
+      okText:'仍要载入', danger:true,
+      onOk(){ loadExample(); }
+    });
+    return;
+  }
+  loadExample();
+}
+function loadExample(){
+  undoStack = []; // 避免之前的"撤销删除"快照把旧卡插回刚载入的示例报告
+  state.pendingInsights = [];
+  state.docName = '安全运营周报 · 2026 W33';
+  $('#docname').value = state.docName;
+  const now = Date.now(), at = fmtTime();
+
+  const s1 = makeCard('static');
+  s1.title = '报告标题与说明';
+  s1.html = '<h1>安全运营周报</h1>' +
+    '<p class="muted">报告周期:2026-08-06 ~ 2026-08-12 · 编制:安全运营中心 · 密级:内部</p>' +
+    '<p>本报告基于 SIEM 平台实时采集的安全事件数据自动生成,涵盖本周安全事件明细、每日趋势与 AI 分析结论,供管理层与一线运营团队参考。</p>';
+
+  const c2 = makeCard('sql');
+  c2.title = '安全事件明细';
+  c2.queries = [{ id: uid(), name:'本周安全事件明细', sql: SQL_TPL_EVENTS }];
+  c2.basis = '用表格展示本周安全事件明细,按发生时间倒序排列';
+  c2.scriptVer = 1;
+  c2.script = genScriptFor(c2);
+  c2.lastPreview = { version: state.dataVersion, ts: now - 2000, at, snapshots: buildSnapshots(c2) };
+
+  const c3 = makeCard('sql');
+  c3.title = '每日事件趋势';
+  c3.queries = [{ id: uid(), name:'近7日每日事件趋势', sql: SQL_TPL_TREND }];
+  c3.basis = '表格展示近 7 天每日安全事件趋势,并用一句话说明整体变化';
+  c3.scriptVer = 1;
+  c3.script = genScriptFor(c3);
+  c3.lastPreview = { version: state.dataVersion, ts: now - 1000, at, snapshots: buildSnapshots(c3) };
+
+  const c4 = makeCard('insight');
+  c4.title = '本周安全态势总结';
+  c4.refIds = [c2.id, c3.id];
+  c4.prompt = '用 100 个字以内总结本周安全态势,指出最需要关注的风险,并给出一条处置建议。';
+
+  state.cards = [s1, c2, c3, c4];
+  state.selectedId = null;
+  c4.genCount = 1;
+  c4.output = composeInsight(c4);
+  c4.genTs = now;
+  c4.genAt = at;
+  c4.genVersion = state.dataVersion;
+  c4.genPrompt = c4.prompt;
+
+  renderAll();
+  toast('示例报告已载入:静态卡 + 2 张就绪的 SQL 卡 + 洞见卡。试试「模拟数据源更新」体验过期链路', 'success');
+}
+
+/* ---------- 查询弹窗 ---------- */
+let modalCtx = null;
+function openQueryModal(cardId, qid){
+  const c = findCard(cardId);
+  if(!c) return;
+  const q = qid ? c.queries.find(x => x.id === qid) : null;
+  /* baseline 记录弹窗打开时的初始值,用于关闭前判断"是否已有未保存的输入"(item5) */
+  modalCtx = { kind:'query', cardId, qid: qid || null, baseline: { name: q ? q.name : '', sql: q ? q.sql : SQL_TPL_EVENTS } };
+  $('#modal-root').innerHTML =
+    '<div class="overlay" data-overlay="1"><div class="dialog">' +
+      '<div class="dlg-head">' + (q ? '编辑 SQL 查询' : '新建 SQL 查询') +
+        '<button class="icon-btn" data-act="modal-cancel">' + I.close + '</button></div>' +
+      '<div class="dlg-body">' +
+        '<div class="fld"><label>查询名称</label>' +
+          '<input type="text" id="qm-name" placeholder="例:本周安全事件明细" value="' + esc(q ? q.name : '') + '"></div>' +
+        '<div class="fld"><label>SQL 文本 <span class="fld-hint">纯前端模拟执行,按表名匹配内置 mock 数据</span></label>' +
+          '<textarea id="qm-sql" class="code" rows="9" spellcheck="false" placeholder="SELECT ...">' + esc(q ? q.sql : SQL_TPL_EVENTS) + '</textarea>' +
+          '<div class="tpl-row"><span class="fld-hint">内置数据表:</span>' +
+            '<button class="tpl-chip" data-act="qm-tpl" data-tpl="events">' + I.db + '<code>security_events</code> 安全事件明细</button>' +
+            '<button class="tpl-chip" data-act="qm-tpl" data-tpl="trend">' + I.db + '<code>daily_trend</code> 每日趋势</button>' +
+          '</div>' +
+          '<div id="qm-err" style="color:var(--error);font-size:11px;margin-top:4px;display:none"></div>' +
+        '</div>' +
+        /* item5:关闭前若已有未保存输入,原地弹出这条确认条,而不是另开一层弹窗——
+           另开弹窗会把当前这个查询表单从 DOM 里整个替换掉,点"取消"后就再也回不去了。 */
+        '<div id="qm-discard-bar" class="banner warn" style="display:none;margin-top:4px">' +
+          '<span class="bn-ico">' + I.warn + '</span>' +
+          '<div class="bn-body">查询名称或 SQL 文本已修改但尚未保存,确定放弃这些修改并关闭吗?' +
+            '<div class="bn-act">' +
+              '<button class="btn btn-sm" data-act="qm-discard-cancel">继续编辑</button>' +
+              '<button class="btn btn-sm btn-danger" data-act="qm-discard-ok">放弃并关闭</button>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="dlg-foot">' +
+        '<button class="btn" data-act="modal-cancel">取消</button>' +
+        '<button class="btn btn-primary" data-act="qm-save">' + (q ? '保存修改' : '添加查询') + '</button>' +
+      '</div>' +
+    '</div></div>';
+  setTimeout(() => { const n = $('#qm-name'); if(n) n.focus(); }, 30);
+}
+function saveQueryModal(){
+  if(!modalCtx || modalCtx.kind !== 'query') return;
+  const name = $('#qm-name').value.trim();
+  const sql = $('#qm-sql').value.trim();
+  const err = $('#qm-err');
+  if(!name || !sql){
+    err.textContent = !name ? '请填写查询名称' : '请填写 SQL 文本';
+    err.style.display = 'block';
+    return;
+  }
+  const cardId = modalCtx.cardId;
+  const c = findCard(cardId);
+  if(c){
+    if(modalCtx.qid){
+      const q = c.queries.find(x => x.id === modalCtx.qid);
+      if(q){ q.name = name; q.sql = sql; }
+    } else {
+      c.queries.push({ id: uid(), name, sql });
+    }
+    if(c.lastPreview) c.configDirty = true;
+  }
+  closeModal();
+  if(c){
+    /* item2:查询增删改会改变这张卡的 sqlStatus(如已取数过的卡变为待重新取数),
+     * 必须走统一的 syncCard——左侧 chrome、右侧 pv-block、顶栏过期计数三处一起刷新,
+     * 不能只改左侧留右侧展示旧结果。 */
+    rerenderCardFull(cardId);
+    syncCard(cardId);
+    schedulePersist();
+  }
+  toast('查询已保存' + (c && c.lastPreview ? ',请重新取数' : ''), 'success');
+}
+/* item5:弹窗内容与打开时的初始值不同即视为"已有输入" */
+function queryModalDirty(){
+  if(!modalCtx || modalCtx.kind !== 'query') return false;
+  const nameEl = $('#qm-name'), sqlEl = $('#qm-sql');
+  if(!nameEl || !sqlEl) return false;
+  return nameEl.value !== modalCtx.baseline.name || sqlEl.value !== modalCtx.baseline.sql;
+}
+function closeModal(){
+  $('#modal-root').innerHTML = '';
+  modalCtx = null;
+}
+/* item5:点遮罩 / 按 Esc / 点「取消」关闭查询弹窗前,若已有未保存的修改,一律先原地
+ * 弹出确认条再决定是否真正关闭——用同一个 qm-discard-bar,而不是像通用确认弹窗那样
+ * 另开一层 overlay:另开一层会把当前查询表单从 DOM 里整个替换掉,一旦用户在那层
+ * 点"取消"就再也回不到原来正在编辑的表单了(那正是"取消"本该做到的事)。 */
+function requestCloseModal(){
+  if(queryModalDirty()){
+    const bar = document.getElementById('qm-discard-bar');
+    if(bar){ bar.style.display = 'flex'; return; }
+  }
+  closeModal();
+}
+
+/* ---------- 通用确认弹窗 ---------- */
+let confirmCb = null;
+function openConfirm(opt){
+  confirmCb = opt.onOk || null;
+  $('#modal-root').innerHTML =
+    '<div class="overlay" data-overlay="1"><div class="dialog" style="width:460px">' +
+      '<div class="dlg-head">' + esc(opt.title) + '<button class="icon-btn" data-act="modal-cancel">' + I.close + '</button></div>' +
+      '<div class="dlg-body">' + opt.body + '</div>' +
+      '<div class="dlg-foot">' +
+        '<button class="btn" data-act="modal-cancel">取消</button>' +
+        '<button class="btn ' + (opt.danger ? 'btn-danger' : 'btn-primary') + '" data-act="confirm-ok">' + esc(opt.okText || '确定') + '</button>' +
+      '</div>' +
+    '</div></div>';
+}
+
+/* ---------- Toast ---------- */
+function toast(msg, type, action){
+  const root = $('#toast-root');
+  const el = document.createElement('div');
+  el.className = 'toast ' + (type || 'info');
+  const ico = type === 'success' ? I.check : (type === 'warning' ? I.warn : I.clock);
+  el.innerHTML = '<span class="t-ico">' + ico + '</span><span>' + msg + '</span>' +
+    (action ? '<button class="btn-text btn btn-sm" data-act="' + action.act + '"' + (action.undoId ? ' data-undo-id="' + esc(action.undoId) + '"' : '') + '>' + action.label + '</button>' : '');
+  root.appendChild(el);
+  setTimeout(() => {
+    el.classList.add('out');
+    setTimeout(() => el.remove(), 300);
+    /* toast 过期后,对应的撤销快照也一并从栈里清掉,避免无限增长 */
+    if(action && action.undoId) undoStack = undoStack.filter(en => en.undoId !== action.undoId);
+  }, action ? 5000 : 3200);
+}
+
+/* ---------- 事件委托:点击 ---------- */
+document.addEventListener('click', e => {
+  const actEl = e.target.closest('[data-act]');
+
+  /* 关闭插入菜单(点击其它区域时) */
+  if(!e.target.closest('.ins-zone')) $$('.ins-zone.open').forEach(z => z.classList.remove('open'));
+
+  /* 遮罩点击关闭(item5:查询弹窗有未保存输入时先确认丢弃) */
+  if(e.target.dataset && e.target.dataset.overlay){ requestCloseModal(); return; }
+
+  if(!actEl){
+    /* 无动作:处理联动选中 */
+    if(state.mode === 'edit'){
+      const pv = e.target.closest('.pv-block');
+      if(pv){ selectCard(pv.dataset.cardId, 'right'); return; }
+      const cf = e.target.closest('.cfg-card');
+      if(cf && state.selectedId !== cf.dataset.cardId) selectCard(cf.dataset.cardId, 'left');
+    }
+    return;
+  }
+
+  const act = actEl.dataset.act;
+  const cardEl = actEl.closest('[data-card-id]');
+  const cid = cardEl ? cardEl.dataset.cardId : null;
+
+  switch(act){
+    case 'mode':
+      state.mode = actEl.dataset.mode;
+      renderAll();
+      break;
+    case 'print':
+      window.print();
+      break;
+    case 'sim-update':
+      simulateDataUpdate();
+      break;
+    case 'load-example':
+      requestLoadExample();
+      break;
+    case 'new-blank':
+      requestNewBlankReport();
+      break;
+    case 'jump-stale':
+      jumpStale();
+      break;
+    case 'undo-del':
+      undoByToastId(actEl.dataset.undoId);
+      actEl.closest('.toast') && actEl.closest('.toast').remove();
+      break;
+    case 'ins-open': {
+      const z = actEl.closest('.ins-zone');
+      const wasOpen = z.classList.contains('open');
+      $$('.ins-zone.open').forEach(x => {
+        x.classList.remove('open');
+        const m = x.querySelector('.ins-menu');
+        if(m) m.classList.remove('flip-up');
+      });
+      if(!wasOpen){
+        z.classList.add('open');
+        const menu = z.querySelector('.ins-menu');
+        if(menu){
+          /* 靠近视口底部、下方放不下菜单时向上翻转展开,避免被裁切 */
+          const zoneRect = z.getBoundingClientRect();
+          const menuH = menu.offsetHeight;
+          if(zoneRect.bottom + 20 + menuH > window.innerHeight) menu.classList.add('flip-up');
+        }
+      }
+      break;
+    }
+    case 'ins-add': {
+      const idx = parseInt(actEl.dataset.index, 10);
+      addCard(actEl.dataset.type, isNaN(idx) ? state.cards.length : idx);
+      break;
+    }
+    case 'collapse': {
+      /* 折叠/展开是本次 click 自身同步处理内的结构性变化,不存在"另一个正在进行中的点击"
+       * 会被打断,因此这里整卡替换是安全的(区别于 change/input 引起的细粒度局部更新)。 */
+      const c = findCard(cid);
+      if(c){ c.collapsed = !c.collapsed; rerenderCardFull(cid); schedulePersist(); }
+      break;
+    }
+    case 'del-card':
+      requestDelete(cid);
+      break;
+    case 'q-new':
+      openQueryModal(cid, null);
+      break;
+    case 'q-edit':
+      openQueryModal(cid, actEl.dataset.qid);
+      break;
+    case 'q-del': {
+      const c = findCard(cid);
+      if(c){
+        c.queries = c.queries.filter(q => q.id !== actEl.dataset.qid);
+        if(!c.queries.length){
+          /* 删光查询后没有任何查询可对应旧快照——必须一并清掉 c.lastPreview,
+           * 否则之后再新建一个新查询时,sqlStatus 会因为 lastPreview 仍非空
+           * 而直接展示那份属于旧查询的快照表格("复活"了已经不存在的数据)。 */
+          c.lastPreview = null;
+        } else if(c.lastPreview){
+          c.configDirty = true;
+        }
+        rerenderCardFull(cid);
+        /* item2:删光查询后 sqlStatus 会变回 unconfigured——必须走 syncCard 让右侧
+         * pv-block 立刻跟着换成灰化的中性占位提示,不能继续展示已经不存在的旧表格。 */
+        syncCard(cid);
+        schedulePersist();
+        toast('已移除查询' + (c.lastPreview ? ',请重新取数' : ''), 'info');
+      }
+      break;
+    }
+    case 'gen-script':
+      /* item3:是否需要就"放弃待应用的 pending 脚本"和/或"覆盖手动修改"二次确认,
+       * 统一交给 requestGenScript 判断——两类提示可能依次出现,也可能都不出现。 */
+      requestGenScript(cid);
+      break;
+    case 'preview':
+      runPreview(cid);
+      break;
+    case 'apply-pending-script':
+      /* item3:pendingScript 不再有 focusout 自动应用的路径,点击「应用」是唯一入口;
+       * 若挂起期间脚本框内已有手动修改,requestApplyPendingScript 内部会先弹确认。 */
+      requestApplyPendingScript(cid);
+      break;
+    case 'gen-insight':
+      runGenInsight(cid);
+      break;
+    case 'refresh-upstream':
+      refreshUpstream(cid);
+      break;
+    case 'goto-card':
+      selectCard(actEl.dataset.target, 'both');
+      break;
+    case 'fmt': {
+      const c = findCard(cid);
+      const ed = cardEl ? cardEl.querySelector('.rich-editor') : null;
+      if(c && ed){
+        ed.focus();
+        const cmd = actEl.dataset.cmd;
+        const rawVal = actEl.dataset.val || null;
+        /* item9:formatBlock 的值须带尖括号(如 "<h1>")才能在 Firefox 下正确生效,
+           Chrome/Safari 两种写法都接受,统一加尖括号更兼容。 */
+        const val = (cmd === 'formatBlock' && rawVal) ? ('<' + rawVal + '>') : rawVal;
+        document.execCommand(cmd, false, val);
+        c.html = ed.innerHTML;
+        const pv = $('[data-body-of="' + c.id + '"]');
+        if(pv) pv.innerHTML = c.html;
+        schedulePersist();
+      }
+      break;
+    }
+    case 'qm-tpl': {
+      const ta = $('#qm-sql');
+      const nm = $('#qm-name');
+      if(ta) ta.value = actEl.dataset.tpl === 'trend' ? SQL_TPL_TREND : SQL_TPL_EVENTS;
+      if(nm && !nm.value.trim()) nm.value = actEl.dataset.tpl === 'trend' ? '近7日每日事件趋势' : '本周安全事件明细';
+      break;
+    }
+    case 'qm-save':
+      saveQueryModal();
+      break;
+    case 'modal-cancel':
+      /* item5:统一经过 requestCloseModal 判断——查询弹窗有未保存输入时,
+         X/取消/遮罩/Esc 这几条"关闭"路径都先原地确认,而不是立即关掉。 */
+      requestCloseModal();
+      break;
+    case 'qm-discard-cancel': {
+      const bar = document.getElementById('qm-discard-bar');
+      if(bar) bar.style.display = 'none';
+      break;
+    }
+    case 'qm-discard-ok':
+      closeModal();
+      break;
+    case 'confirm-ok': {
+      const cb = confirmCb;
+      confirmCb = null;
+      closeModal();
+      if(cb) cb();
+      break;
+    }
+  }
+});
+
+/* 工具条按钮不抢走富文本选区 */
+document.addEventListener('mousedown', e => {
+  if(e.target.closest('[data-act="fmt"]')) e.preventDefault();
+});
+
+/* Esc 关闭弹窗(item5:查询弹窗有未保存输入时先确认丢弃);
+   Enter 提交查询弹窗(textarea 内除外,textarea 里 Enter 用于换行)。 */
+document.addEventListener('keydown', e => {
+  if(!$('#modal-root').innerHTML) return;
+  if(e.key === 'Escape'){ requestCloseModal(); return; }
+  if(e.key === 'Enter' && modalCtx && modalCtx.kind === 'query' && e.target.tagName !== 'TEXTAREA'){
+    e.preventDefault();
+    saveQueryModal();
+  }
+});
+
+/* item1(本轮根因修复):dirty/stale 这类会改变卡片高度的横幅,一旦挪到"敲完字、
+ * 鼠标移向按钮、松手点击"这段时间之外的 blur/change 才出现,就会在用户鼠标已经在路上时
+ * 才把按钮/下方插入「+」顶下去——这次点击的 mousedown~mouseup 之间恰好插入了一次布局
+ * 变化,浏览器就不会把它合成为按钮的 click,点击被吞。根治方式:让这类横幅在 input
+ * (逐击键)阶段的"第一次状态翻转"那一刻就出现,而不是等到 blur。翻转只发生一次
+ * (用 changed 标志位把 dirty=false→true 的那次keystroke 之后的所有后续 keystroke 都短路掉),
+ * 所以既是"实时"的,也不会每敲一下都触发一次开销较大的刷新。
+ * ↑ 但 changed 只覆盖 scriptEdited/configDirty 各自"第一次翻转"这一种情形——如果两者早已
+ * 翻转过(比如已过期卡),此后脚本在空↔非空之间来回编辑(如全选删除脚本变回「未配置」,
+ * 再敲回内容变回「已过期/可取数」),changed 会一直是 false,badge 与运行取数按钮就会停留
+ * 在旧状态,点击"重新运行取数"实际会被 runPreview 里的 unconfigured 判断静默拦下。因此额外
+ * 用 c._syncedStatus(上一次真正同步到 DOM 的状态值)兜底比对,只要 sqlStatus 计算结果与
+ * 缓存不同就必须 syncCard,不依赖 scriptEdited/configDirty 是否发生过翻转。 */
+function applyScriptEditDirty(c){
+  let changed = false;
+  if(!c.scriptEdited){ c.scriptEdited = true; changed = true; }
+  if(c.lastPreview && !c.configDirty){ c.configDirty = true; changed = true; }
+  const nowStatus = sqlStatus(c);
+  if(changed || nowStatus !== c._syncedStatus) syncCard(c.id); // 左侧横幅、右侧 pv-block(变为 stale 展示)、顶栏计数一并实时刷新
+}
+function applyPromptEditDirty(c, cardEl){
+  /* 按钮是否可用 / 原因文案属于"每次按键都可能变"的轻量展示,始终原地刷新 */
+  updateGenInsightRow(cardEl, c, insightStatus(c), canGenerateInsight(c));
+  let changed = false;
+  if(c.output){
+    /* dirty 横幅:与上次生成时的 genPrompt 做双向比较——改回原提示词即消除提示。
+       只有真正发生翻转的那一刻才做较重的 syncCard,避免每次按键都重建。 */
+    const nowDirty = (c.prompt !== c.genPrompt);
+    if(nowDirty !== !!c.dirty){ c.dirty = nowDirty; changed = true; }
+  }
+  /* 同 applyScriptEditDirty:dirty 早已是 true 时(如已经改过一次)再清空提示词,
+     不会再触发一次 dirty 翻转,但 insightStatus 本身会从 stale/done 变成 unconfigured,
+     徽章/横幅仍必须跟着变——用状态值比对兜底,覆盖 dirty 翻转覆盖不到的迁移。 */
+  const nowStatus = insightStatus(c);
+  if(changed || nowStatus !== c._syncedStatus) syncCard(c.id);
+}
+
+/* ---------- 事件委托:输入(逐击键触发) ----------
+ * 把值写回 state,并按上面两个"仅在真正需要时才做较重刷新"的辅助函数,实时驱动会影响
+ * 布局的横幅/徽章——因为按钮/文本框节点从未被替换,用户可以随时把焦点从一个输入框
+ * 直接移到另一个输入框、或点击同一张卡里的按钮,不会丢焦点、不会丢点击。 */
+const listEl = $('#card-list');
+listEl.addEventListener('input', e => {
+  const t = e.target;
+  const cardEl = t.closest('[data-card-id]');
+  if(!cardEl) return;
+  const c = findCard(cardEl.dataset.cardId);
+  if(!c) return;
+  if(t.classList.contains('title-input')){
+    c.title = t.value;
+    $$('[data-title-of="' + c.id + '"]').forEach(n => { n.textContent = c.title || '未命名卡片'; });
+    syncCardTitleRefs(c);
+    schedulePersist(); // item4:自动保存补漏——标题此前漏了这一句,只改标题刷新后会丢
+    return;
+  }
+  if(t.classList.contains('rich-editor')){
+    c.html = t.innerHTML;
+    const pv = $('[data-body-of="' + c.id + '"]');
+    if(pv) pv.innerHTML = c.html;
+    schedulePersist(); // item4:自动保存补漏——富文本正文此前漏了这一句,只改正文刷新后会丢
+    return;
+  }
+  const bind = t.dataset.bind;
+  if(bind){
+    c[bind] = t.value;
+    if(bind === 'basis') updateGenScriptRow(cardEl, c);
+    if(bind === 'prompt') applyPromptEditDirty(c, cardEl);
+    if(bind === 'script') applyScriptEditDirty(c);
+    schedulePersist();
+  }
+});
+
+/* ---------- 事件委托:变化(change,多为失焦触发) ----------
+ * 会影响布局的状态翻转已经在 input 阶段原地完成,change/blur 这里只做两件轻量的事:
+ * ①勾选类交互本来就是与"点击"同一次手势,天然不存在"先重排、后点偏"的时间差,继续在
+ * 这里处理;②对已经在 input 阶段实时更新过的字段(脚本/提示词),blur 时只补一条一次性
+ * toast 提示,不再重复任何会重排布局的 DOM 变更。 */
+listEl.addEventListener('change', e => {
+  const t = e.target;
+  const cardEl = t.closest('[data-card-id]');
+  if(!cardEl) return;
+  const c = findCard(cardEl.dataset.cardId);
+  if(!c) return;
+  /* 洞见引用勾选:只切换这一行的 is-checked 样式 + 用统一的 syncCard 刷新本卡徽章/横幅/
+     动作区 + 右侧 pv-block + 顶栏计数,不触碰引用列表其它行,不会打断连续勾选。 */
+  if(t.dataset.refid){
+    const rid = t.dataset.refid;
+    if(t.checked){ if(!c.refIds.includes(rid)) c.refIds.push(rid); }
+    else c.refIds = c.refIds.filter(x => x !== rid);
+    if(c.output) c.dirty = true;
+    if(c.refIds.length) c.brokenNote = '';
+    const row = t.closest('.ref-item');
+    if(row) row.classList.toggle('is-checked', t.checked);
+    syncCard(c.id);
+    schedulePersist();
+    return;
+  }
+  /* 手动编辑脚本:state 变更与横幅/徽章/pv-block 刷新已经在 input 阶段的
+     applyScriptEditDirty 里实时完成,这里只在真正离开文本框时补一条提示。 */
+  if(t.dataset.bind === 'script'){
+    schedulePersist();
+    toast('脚本已手动修改' + (c.lastPreview ? ',取数结果已标记为需更新' : ''), 'info');
+    return;
+  }
+  /* 提示词:dirty 状态与横幅已经在 input 阶段的 applyPromptEditDirty 里实时完成,
+     这里无需任何额外 DOM 更新。 */
+  if(t.dataset.bind === 'prompt') return;
+  /* 脚本依据(basis)的按钮态/提示条已经在 input 阶段逐击键刷新过,此处无需任何 DOM 更新——
+     从始至终都不会有任何重建发生在"点 AI 生成脚本"这次点击的 mousedown~mouseup 之间。 */
+  if(t.dataset.bind === 'basis') schedulePersist();
+});
+/* item3(本轮):pendingScript 改为"永不自动应用"——此前脚本框 focusout(失焦)时会
+ * 委托到这里静默调用 applyPendingScript,这带来两个问题:①用户可能只是临时点开别处
+ * 看一眼又点回来,并无意让 AI 结果覆盖她正在看/改的脚本,却被这次失焦悄悄应用掉;
+ * ②这次静默应用本身会触发 syncCard() 引发的横幅/按钮布局变化,一旦恰好发生在用户
+ * 点击别处按钮的 mousedown~mouseup 之间,就会重演本文件反复强调的"点击被布局位移吞掉"
+ * 问题。因此彻底删除这条 focusout 委托——pending 提示条常驻显示,只有用户显式点击
+ * 「应用」(见下方 click 委托里的 'apply-pending-script' 分支)才会真正落地,应用前
+ * 若脚本框内已有手动修改还会先弹确认,不会静默覆盖。 */
+
+/* 顶栏报告名:即时同步到浏览器标签页标题与打印页眉,并纳入自动保存 */
+$('#docname').addEventListener('input', e => { state.docName = e.target.value; syncDocTitle(); schedulePersist(); });
+
+/* ---------- 悬停联动 ---------- */
+function bindHover(container){
+  container.addEventListener('mouseover', e => {
+    if(state.mode === 'read') return;
+    const el = e.target.closest('[data-card-id]');
+    setHover(el ? el.dataset.cardId : null);
+  });
+  container.addEventListener('mouseleave', () => setHover(null));
+}
+bindHover(listEl);
+bindHover($('#paper-scroll'));
+
+/* item2:静态文本块支持双击→自动定位左侧对应卡并聚焦其富文本编辑区
+   (右侧成品预览本身不可编辑,双击只是跳转到左侧真正可编辑的地方)。 */
+$('#paper-scroll').addEventListener('dblclick', e => {
+  if(state.mode === 'read') return;
+  const block = e.target.closest('[data-dblclick="static"]');
+  if(!block) return;
+  const id = block.dataset.cardId;
+  const c = findCard(id);
+  if(!c) return;
+  if(c.collapsed){ c.collapsed = false; rerenderCardFull(id); schedulePersist(); }
+  selectCard(id, 'both');
+  const ed = document.querySelector('#card-list [data-card-id="' + id + '"] .rich-editor');
+  if(ed){
+    ed.focus();
+    const range = document.createRange();
+    range.selectNodeContents(ed);
+    range.collapse(false);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+});
+
+/* ---------- 拖拽排序 ---------- */
+let dragId = null;
+listEl.addEventListener('mousedown', e => {
+  const handle = e.target.closest('.drag');
+  const card = e.target.closest('.cfg-card');
+  if(handle && card) card.setAttribute('draggable', 'true');
+});
+listEl.addEventListener('dragstart', e => {
+  const card = e.target.closest('.cfg-card');
+  if(!card || card.getAttribute('draggable') !== 'true'){ e.preventDefault(); return; }
+  dragId = card.dataset.cardId;
+  e.dataTransfer.effectAllowed = 'move';
+  try { e.dataTransfer.setData('text/plain', dragId); } catch(_){ }
+  setTimeout(() => card.classList.add('dragging'), 0);
+});
+listEl.addEventListener('dragover', e => {
+  if(!dragId) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  $$('.drop-before,.drop-after').forEach(n => n.classList.remove('drop-before', 'drop-after'));
+  const over = e.target.closest('.cfg-card');
+  if(!over || over.dataset.cardId === dragId) return;
+  const rect = over.getBoundingClientRect();
+  const before = e.clientY < rect.top + rect.height / 2;
+  over.classList.add(before ? 'drop-before' : 'drop-after');
+});
+listEl.addEventListener('drop', e => {
+  if(!dragId) return;
+  e.preventDefault();
+  const over = e.target.closest('.cfg-card');
+  const from = cardIdx(dragId);
+  if(from < 0){ cleanupDrag(); return; }
+  let to;
+  if(over && over.dataset.cardId !== dragId){
+    const rect = over.getBoundingClientRect();
+    const before = e.clientY < rect.top + rect.height / 2;
+    to = cardIdx(over.dataset.cardId) + (before ? 0 : 1);
+  } else if(!over){
+    const z = e.target.closest('.ins-zone');
+    const zi = z ? parseInt(z.dataset.index, 10) : NaN;
+    to = isNaN(zi) ? state.cards.length : zi;
+  } else {
+    cleanupDrag(); return;
+  }
+  const moved = state.cards.splice(from, 1)[0];
+  if(to > from) to--;
+  state.cards.splice(to, 0, moved);
+  cleanupDrag();
+  renderAll();
+  selectCard(moved.id, 'both');
+  toast('已调整卡片顺序', 'info');
+});
+listEl.addEventListener('dragend', cleanupDrag);
+/* 松开鼠标但未发生拖拽时,清掉临时 draggable,避免后续误拖卡片 */
+document.addEventListener('mouseup', () => {
+  if(!dragId) $$('.cfg-card[draggable]').forEach(n => n.removeAttribute('draggable'));
+});
+function cleanupDrag(){
+  dragId = null;
+  $$('.cfg-card').forEach(n => {
+    n.classList.remove('dragging', 'drop-before', 'drop-after');
+    n.removeAttribute('draggable');
+  });
+}
+
+/* ---------- 初始化:优先恢复上次自动保存的内容,否则展示精心设计的空状态 ---------- */
+/* item5:loadPersisted() 内部的结构校验 + 归一化已经兜住了已知的缺字段场景,这里再包一层
+ * try/catch 作为最后一道防线——任何未预见的异常都不应该让用户停在白屏上。一旦触发,
+ * 直接清空 state.cards、删掉持久化键(避免下次刷新又读到同一份坏数据死循环)、重新
+ * renderAll() 退回空状态。finally 里无条件把 booting 复位为 false:哪怕这条路径本身
+ * 也失败了,也绝不能让 booting 永远卡在 true——那样此后所有编辑都不会再写盘。 */
+let restoredFromStorage = false;
+try{
+  restoredFromStorage = loadPersisted();
+  renderAll();
+} catch(err){
+  state.cards = [];
+  try{ localStorage.removeItem(PERSIST_KEY); } catch(e2){ /* 隐私模式等场景下静默失败 */ }
+  restoredFromStorage = false;
+  renderAll();
+} finally {
+  booting = false; // item5:初始化渲染已完成(无论成功与否),此后的 renderAll() 恢复正常写盘
+}
+if(restoredFromStorage){
+  toast('已自动恢复上次编辑的内容(' + state.cards.length + ' 张卡片)', 'info');
+  /* item3:恢复内容里若清洗出了残留的"取数中/生成中"等中断态,额外告知用户已重置,
+     避免她盯着一个看起来卡住但其实需要重新点一次的按钮摸不着头脑。 */
+  if(restoredFromStorage === 'stuck'){
+    toast('检测到刷新前有未完成的取数/生成操作,已重置为可重新操作的状态', 'warning');
+  }
+}
+</script>
+</body>
+</html>

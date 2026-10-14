@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>动态内容 · 配方模型 Demo（数据+要求=配方,内容按配方生成）</title>
+<style>
+    /* ==== 观远 gds tokens ==== */
+    :root {
+        --primary: #1a827f;
+        --primary-hover: #339b98;
+        --primary-bg: #eef4f4;
+        --bg-canvas: #f2f4f8;
+        --bg-alt: #ffffff;
+        --bg-hover: #f2f4f8;
+        --border-divide: #dde1e6;
+        --border-outline: #cdd3da;
+        --text-em: #21272a;
+        --text-body: #343a3f;
+        --text-secondly: #697077;
+        --text-hint: #878d96;
+        --text-disable: #a2a9b0;
+        --success: #198038;
+        --warning-bg: #fcf4d6;
+        --warning-text: #755800;
+        --error: #da1e28;
+        --error-bg: #fff1f1;
+        --error-text: #a2191f;
+        --chart-bar: #3582fe;
+        --shadow-popover: 0 5px 12px 4px rgba(0,0,0,.01), 0 3px 6px rgba(0,0,0,.16), 0 1px 2px -2px rgba(0,0,0,.16);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+        font-family: Inter, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+        background: var(--bg-canvas);
+        color: var(--text-body);
+        font-size: 13px; line-height: 20px;
+        display: flex; justify-content: center;
+        padding: 24px 16px 64px;
+    }
+    .stage { width: 760px; }
+    .demo-note { margin-bottom: 12px; color: var(--text-hint); font-size: 12px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+    .demo-note .spacer { flex: 1; }
+    .demo-note button { border: 1px solid var(--border-outline); background: var(--bg-alt); border-radius: 2px; padding: 3px 10px; font-size: 12px; color: var(--text-body); cursor: pointer; }
+    .demo-note button:hover { color: var(--primary); border-color: var(--primary); }
+    .demo-note label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+    .demo-note input { accent-color: var(--primary); }
+
+    /* ===== 报告工具栏：发布即发布配方 ===== */
+    .report-bar {
+        display: flex; align-items: center; gap: 10px;
+        background: var(--bg-alt);
+        border: 1px solid var(--border-divide); border-radius: 8px;
+        padding: 10px 16px; margin-bottom: 14px;
+    }
+    .report-title { font-size: 15px; font-weight: 600; color: var(--text-em); }
+    .report-bar .pub-note { margin-left: auto; font-size: 12px; color: var(--text-hint); }
+    .pub-btn {
+        height: 30px; padding: 0 16px; border: none; border-radius: 3px;
+        background: var(--primary); color: #fff; font-size: 13px; cursor: pointer; font-family: inherit;
+    }
+    .pub-btn:hover { background: var(--primary-hover); }
+
+    /* ===== 卡片外壳 ===== */
+    .card { background: var(--bg-alt); border: 1px solid var(--border-divide); border-radius: 8px; margin-bottom: 14px; }
+    .card.editing { border-color: var(--primary); }
+    .card-chrome { display: flex; align-items: center; gap: 8px; padding: 10px 14px 0; }
+    .drag { color: var(--border-outline); font-size: 14px; letter-spacing: -2px; cursor: grab; user-select: none; }
+    .card-icon { width: 22px; height: 22px; flex: 0 0 auto; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; }
+    .card-icon.dyn { background: var(--primary-bg); color: var(--primary); }
+    .card-icon.ins { background: #e8daff; color: #6929c4; }
+    .card-icon.txt { background: var(--bg-canvas); color: var(--text-secondly); }
+    .card-name { min-width: 0; max-width: 300px; font-size: 14px; font-weight: 600; color: var(--text-em); border: 1px solid transparent; border-radius: 2px; padding: 0 4px; font-family: inherit; background: transparent; }
+    .card-name:hover { border-color: var(--border-outline); }
+    .card-name:focus { outline: none; border-color: var(--primary); }
+    .chrome-actions { margin-left: auto; display: inline-flex; align-items: center; gap: 12px; font-size: 12px; }
+    .chrome-actions a { color: var(--text-secondly); cursor: pointer; }
+    .chrome-actions a:hover { color: var(--primary); }
+    .chrome-actions a.danger:hover { color: var(--error); }
+
+    /* ===== 配方摘要行（阅读态）：一句人话 = 这张卡的全部配置 ===== */
+    .recipe-line {
+        display: none;
+        align-items: baseline; gap: 6px;
+        margin: 8px 14px 0 36px;
+        padding: 5px 10px;
+        border-radius: 4px;
+        background: var(--bg-canvas);
+        font-size: 12px; color: var(--text-secondly);
+        cursor: pointer;
+    }
+    .recipe-line:hover { background: var(--primary-bg); }
+    .recipe-line:hover .recipe-edit { color: var(--primary-hover); }
+    .recipe-line .recipe-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .recipe-line .recipe-text b { color: var(--text-body); font-weight: 500; }
+    .recipe-line .recipe-edit { flex: 0 0 auto; margin-left: auto; color: var(--primary); }
+    .card.reading .recipe-line { display: flex; }
+    .manual-tag {
+        flex: 0 0 auto;
+        padding: 0 6px; border-radius: 999px;
+        font-size: 11px; line-height: 18px;
+        background: var(--warning-bg); color: var(--warning-text);
+        cursor: help;
+    }
+
+    /* 高级区：查看/手改生成代码（渐进披露，仅内容生成后出现） */
+    .adv-box { display: none; margin: 0 14px 10px 106px; border: 1px solid var(--border-divide); border-radius: 4px; overflow: hidden; }
+    .adv-box.show { display: block; }
+    .adv-box textarea {
+        width: 100%; min-height: 130px; border: none; padding: 10px 12px;
+        font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 11px; line-height: 17px;
+        color: var(--text-body); resize: vertical;
+    }
+    .adv-box textarea:focus { outline: none; background: #fbfdfd; }
+    .adv-actions { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-top: 1px solid var(--border-divide); background: var(--bg-canvas); }
+    .adv-actions .note { font-size: 11px; color: var(--text-hint); flex: 1; }
+    .adv-actions .restore { font-size: 12px; color: var(--text-secondly); cursor: pointer; }
+    .adv-actions .restore:hover { color: var(--primary); }
+    .btn-s { height: 26px; padding: 0 12px; border-radius: 2px; font-size: 12px; cursor: pointer; font-family: inherit; border: 1px solid var(--border-outline); background: var(--bg-alt); color: var(--text-body); }
+    .btn-s:hover { color: var(--primary); border-color: var(--primary); }
+    .btn-s.primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+    .btn-s.primary:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
+
+    /* ===== 配方编辑区（编辑态） ===== */
+    .recipe-editor { display: none; margin: 10px 14px 0 36px; }
+    .card.editing .recipe-editor { display: block; }
+    .cfg-row { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 8px; }
+    .cfg-label { flex: 0 0 62px; font-size: 12px; color: var(--text-secondly); line-height: 26px; }
+    .cfg-body { flex: 1; min-width: 0; }
+    .query-tags { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+    .qtag { display: inline-flex; align-items: center; gap: 6px; max-width: 260px; border: 1px solid var(--border-divide); background: var(--bg-alt); border-radius: 2px; padding: 2px 6px; font-size: 12px; line-height: 20px; }
+    .qtag .qname { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+    .qtag:hover { border-color: var(--primary); }
+    .qtag:hover .qname { color: var(--primary); }
+    .qtag .qx { flex: 0 0 auto; cursor: pointer; color: var(--text-hint); width: 16px; height: 16px; line-height: 15px; text-align: center; border-radius: 2px; }
+    .qtag .qx:hover { color: var(--error); background: var(--bg-hover); }
+    .add-wrap { position: relative; display: inline-block; }
+    .add-trigger { display: inline-flex; align-items: center; gap: 4px; border: 1px dashed var(--border-outline); border-radius: 2px; padding: 2px 10px; font-size: 12px; line-height: 20px; color: var(--text-secondly); background: none; cursor: pointer; font-family: inherit; }
+    .add-trigger:hover, .add-wrap.open .add-trigger { color: var(--primary); border-color: var(--primary); }
+    .dropdown { position: absolute; z-index: 10; top: calc(100% + 4px); left: 0; width: 300px; background: var(--bg-alt); border: 1px solid var(--border-divide); border-radius: 4px; box-shadow: var(--shadow-popover); display: none; }
+    .add-wrap.open .dropdown { display: block; }
+    .dd-search { padding: 8px 8px 0; }
+    .dd-search input { width: 100%; height: 28px; border: 1px solid var(--border-outline); border-radius: 2px; padding: 0 8px; font: inherit; font-size: 12px; }
+    .dd-search input:focus { outline: none; border-color: var(--primary); }
+    .dd-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px; border-bottom: 1px solid var(--border-divide); }
+    .dd-selonly { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--text-secondly); cursor: pointer; }
+    .dd-selonly input { accent-color: var(--primary); }
+    .dd-new { font-size: 12px; color: var(--primary); cursor: pointer; }
+    .dd-new:hover { color: var(--primary-hover); }
+    .dd-list { max-height: 168px; overflow-y: auto; padding: 4px 0; }
+    .dd-item { display: flex; align-items: center; gap: 8px; padding: 5px 10px; cursor: pointer; font-size: 12px; }
+    .dd-item:hover { background: var(--bg-hover); }
+    .dd-item input { accent-color: var(--primary); flex: 0 0 auto; }
+    .dd-item .dd-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .dd-empty { padding: 16px 0; text-align: center; color: var(--text-hint); font-size: 12px; }
+    textarea.goal { width: 100%; min-height: 52px; border: 1px solid var(--border-outline); border-radius: 4px; padding: 6px 10px; font: inherit; color: var(--text-body); resize: vertical; }
+    textarea.goal:focus { outline: none; border-color: var(--primary); }
+
+    /* 动作行：一个主动作 + 两个逃生口 */
+    .recipe-actions { display: none; align-items: center; gap: 12px; margin: 2px 14px 10px 106px; }
+    .card.editing .recipe-actions { display: flex; }
+    .gen-btn { height: 28px; padding: 0 16px; border: none; border-radius: 3px; background: var(--primary); color: #fff; font-size: 12px; cursor: pointer; font-family: inherit; }
+    .gen-btn:hover:not(:disabled) { background: var(--primary-hover); }
+    .gen-btn:disabled { background: var(--border-divide); color: var(--text-disable); cursor: not-allowed; }
+    .gen-btn.loading { pointer-events: none; opacity: .75; }
+    .act-hint { font-size: 12px; color: var(--text-hint); }
+    .act-hint.error { color: var(--error-text); }
+    .act-link { font-size: 12px; color: var(--text-secondly); cursor: pointer; }
+    .act-link:hover { color: var(--primary); }
+    .act-link.advanced { margin-left: auto; color: var(--text-hint); }
+
+    /* ===== 内容区 ===== */
+    .content { padding: 12px 14px 14px 36px; position: relative; }
+    .content-placeholder { border: 1px dashed var(--border-outline); border-radius: 4px; background: var(--bg-canvas); padding: 22px 16px; color: var(--text-hint); font-size: 13px; }
+    .content-body { display: none; position: relative; }
+    .content-body.show { display: block; }
+    .content-body h4 { font-size: 14px; color: var(--text-em); margin-bottom: 8px; }
+    .content-body p { font-size: 13px; color: var(--text-body); margin-bottom: 4px; }
+    .chart { display: flex; align-items: flex-end; gap: 18px; height: 120px; padding: 0 8px 22px; border-bottom: 1px solid var(--border-divide); margin-bottom: 18px; }
+    .bar { width: 44px; background: var(--chart-bar); border-radius: 2px 2px 0 0; position: relative; }
+    .bar span { position: absolute; top: -20px; left: 50%; transform: translateX(-50%); font-size: 11px; color: var(--text-secondly); white-space: nowrap; }
+    .bar i { position: absolute; bottom: -20px; left: 50%; transform: translateX(-50%); font-style: normal; font-size: 11px; color: var(--text-hint); white-space: nowrap; }
+
+    /* 旧内容遮罩：改了配方还没生成时，旧内容不许伪装成新内容 */
+    .content-veil {
+        display: none;
+        position: absolute; inset: 0;
+        background: rgba(255,255,255,.72);
+        border-radius: 4px;
+        align-items: center; justify-content: center;
+        font-size: 13px; color: var(--warning-text);
+        text-align: center;
+    }
+    .content-veil.show { display: flex; }
+    .content-veil .veil-inner { background: var(--warning-bg); border-radius: 4px; padding: 8px 14px; }
+
+    .mini-card-body { padding: 10px 14px 14px 36px; color: var(--text-body); }
+</style>
+</head>
+<body>
+<div class="stage">
+    <div class="demo-note">
+        <span>Demo · 配方模型：数据 + 要求 = 配方，内容按配方生成</span>
+        <span class="spacer"></span>
+        <label><input type="checkbox" id="simGenFail">模拟生成失败</label>
+        <button onclick="location.reload()">重置演示</button>
+    </div>
+
+    <!-- 报告工具栏：发布语义 = 发布配方 -->
+    <div class="report-bar">
+        <span class="report-title">8 月销售月报</span>
+        <span class="pub-note">发布后每周一 09:00 用最新数据自动生成并推送</span>
+        <button class="pub-btn" onclick="alert('演示：发布的是各段配方，之后每次按计划用最新数据重新生成')">发布</button>
+    </div>
+
+    <!-- 静态文字卡 -->
+    <div class="card">
+        <div class="card-chrome">
+            <span class="drag">⋮⋮</span>
+            <span class="card-icon txt"><b style="font-size:12px">T</b></span>
+            <input class="card-name" value="卷首语" spellcheck="false">
+            <span class="chrome-actions"><a class="danger">🗑</a></span>
+        </div>
+        <div class="mini-card-body">各位好，以下为 2024 年 8 月品牌销售情况汇总，数据截至 8 月 31 日。</div>
+    </div>
+
+    <!-- ★ 动态内容卡：配方(数据+要求) → 内容 -->
+    <div class="card editing" id="dynCard">
+        <div class="card-chrome">
+            <span class="drag">⋮⋮</span>
+            <span class="card-icon dyn">
+                <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+                    <rect x="1.5" y="7" width="2.6" height="5.5" rx="0.5" fill="currentColor"/>
+                    <rect x="5.7" y="3.5" width="2.6" height="9" rx="0.5" fill="currentColor"/>
+                    <rect x="9.9" y="1.5" width="2.6" height="11" rx="0.5" fill="currentColor"/>
+                </svg>
+            </span>
+            <input class="card-name" id="cardName" value="月度品牌销售分析" spellcheck="false">
+            <span class="chrome-actions"><a class="danger" title="删除卡片">🗑</a></span>
+        </div>
+
+        <!-- 阅读态：一句人话 = 配方摘要，点击即编辑 -->
+        <div class="recipe-line" onclick="startEdit()" title="点击修改">
+            <span class="recipe-text" id="recipeText"></span>
+            <span class="manual-tag" id="manualTag" style="display:none" title="这段的生成代码被手动调整过，内容不再完全由配方决定" onclick="event.stopPropagation(); toggleAdvanced()">已手动调整</span>
+            <span class="recipe-edit">编辑</span>
+        </div>
+
+        <!-- 编辑态：配方的两个输入 -->
+        <div class="recipe-editor">
+            <div class="cfg-row">
+                <span class="cfg-label">数据</span>
+                <div class="cfg-body"><div class="query-tags" id="queryTags"></div></div>
+            </div>
+            <div class="cfg-row">
+                <span class="cfg-label">要求</span>
+                <div class="cfg-body">
+                    <textarea class="goal" id="goalInput" placeholder="想让 AI 把这段写成什么样？例如：用柱状图对比各品牌销售额，并总结前三名" oninput="render()"></textarea>
+                </div>
+            </div>
+        </div>
+        <div class="recipe-actions">
+            <button class="gen-btn" id="genBtn" disabled onclick="generate()">生成</button>
+            <span class="act-hint" id="actHint"></span>
+            <span class="act-link" id="revertLink" style="display:none" onclick="revertDraft()">撤销修改</span>
+            <span class="act-link" id="doneLink" style="display:none" onclick="stopEdit()">完成</span>
+            <span class="act-link advanced" id="advLink" style="display:none" onclick="toggleAdvanced()">高级</span>
+        </div>
+
+        <!-- 高级区：脚本是执行的真源，可看可改；手改留痕 + 可恢复 -->
+        <div class="adv-box" id="advBox">
+            <textarea id="scriptInput" spellcheck="false">import pandas as pd
+
+def fmt_num(v):
+    try:
+        if pd.isna(v):
+            return '-'
+        return f"{float(v):,.2f}"
+    except Exception:
+        return str(v)
+
+# ...（其余 60 余行，本段内容由这份代码生成）</textarea>
+            <div class="adv-actions">
+                <span class="note">这段内容由以上代码生成。手动修改后需「校验并应用」；重新生成会按配方重写代码。</span>
+                <span class="restore" id="restoreLink" style="display:none" onclick="restoreFromRecipe()">恢复为按配方生成</span>
+                <button class="btn-s" onclick="toggleAdvanced()">收起</button>
+                <button class="btn-s primary" onclick="applyScript()">校验并应用</button>
+            </div>
+        </div>
+
+        <!-- 内容区：placeholder / 内容 / 内容+遮罩 -->
+        <div class="content">
+            <div class="content-placeholder" id="placeholder">选好数据、写好要求，AI 生成这一段的图表和文字</div>
+            <div class="content-body" id="contentBody">
+                <h4>各品牌 8 月销售额对比</h4>
+                <div class="chart">
+                    <div class="bar" style="height:96px"><span>1,284 万</span><i>品牌 A</i></div>
+                    <div class="bar" style="height:72px"><span>962 万</span><i>品牌 B</i></div>
+                    <div class="bar" style="height:55px"><span>731 万</span><i>品牌 C</i></div>
+                    <div class="bar" style="height:34px"><span>452 万</span><i>品牌 D</i></div>
+                    <div class="bar" style="height:22px"><span>293 万</span><i>品牌 E</i></div>
+                </div>
+                <p>8 月品牌销售额前三名为品牌 A（1,284 万）、品牌 B（962 万）、品牌 C（731 万），三者合计占整体销售额的 79.8%。品牌 A 环比增长 12.4%，保持领先优势。</p>
+                <div class="content-veil" id="contentVeil">
+                    <span class="veil-inner">配方已修改 — 点「生成」查看新内容，下方是按旧配方生成的内容</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 智能洞见卡：同一套配方语法（引用段落 + 要求） -->
+    <div class="card editing">
+        <div class="card-chrome">
+            <span class="drag">⋮⋮</span>
+            <span class="card-icon ins">✦</span>
+            <input class="card-name" value="销售趋势判断" spellcheck="false">
+            <span class="chrome-actions"><a class="danger">🗑</a></span>
+        </div>
+        <div class="recipe-editor" style="display:block">
+            <div class="cfg-row">
+                <span class="cfg-label">基于段落</span>
+                <div class="cfg-body query-tags"><span class="qtag"><span class="qname">月度品牌销售分析</span><span class="qx">✕</span></span><button class="add-trigger">＋ 选择段落</button></div>
+            </div>
+            <div class="cfg-row">
+                <span class="cfg-label">要求</span>
+                <div class="cfg-body"><textarea class="goal" placeholder="想让 AI 基于上面的段落得出什么？例如：判断趋势并给出下月建议"></textarea></div>
+            </div>
+        </div>
+        <div class="recipe-actions" style="display:flex">
+            <button class="gen-btn" disabled>生成</button>
+            <span class="act-hint">完成后即可生成：填写要求</span>
+        </div>
+        <div class="content">
+            <div class="content-placeholder">选好基于的段落、写好要求，AI 生成这一段的结论</div>
+        </div>
+    </div>
+</div>
+
+<script>
+/*
+ * 配方模型 —— 面向"用户可以明白"的最小心智模型：
+ * - 词汇表只有：数据、要求、内容 ＋ 动词"生成"（脚本降级为"高级"，仅管理员可见）
+ * - 状态只有两种：内容与配方一致（界面安静） / 配方改了还没生成（旧内容蒙灰 + 生成按钮）
+ * - 两个逃生口对应 Excel 心智：生成（回车）/ 撤销修改（Esc）
+ * - 阅读态配方摘要是一句人话，读懂=理解，点击=编辑
+ * - 发布语义在工具栏明示：发布的是配方，每次按计划用最新数据重新生成
+ * 映射到实现：basis=配方快照(basisGoal+basisQueries)；dirty=草稿≠快照；
+ * scriptStatus/previewStatus 等机器状态全部藏到这两个用户状态之下。
+ */
+const QUERIES = [
+    { id: 1, title: '查询 24年8月每个品牌的销售额' },
+    { id: 2, title: '各品牌月度销售趋势（近12月）' },
+    { id: 3, title: '各区域销售额环比' },
+    { id: 4, title: '重点 SKU 库存周转明细' },
+]
+const state = {
+    selected: [1],
+    basis: null,                 /* 配方快照 {queries:[], goal:''}，生成成功时更新 */
+    contentStatus: 'none',       /* none | generating | ready */
+    editing: true,
+    error: '',
+    manualPatched: false,        /* 生成代码被手改过：配方不再完全决定内容，阅读态留痕 */
+}
+
+const $ = id => document.getElementById(id)
+const goalText = () => $('goalInput').value.trim()
+const selectedQueries = () => QUERIES.filter(q => state.selected.includes(q.id))
+const sameRecipe = () => state.basis
+    && state.basis.goal === goalText()
+    && state.basis.queries.join(',') === [ ...state.selected ].sort().join(',')
+const isDirty = () => Boolean(state.basis) && !sameRecipe()
+
+function missingItems () {
+    const miss = []
+    if (!state.selected.length) miss.push('选择数据')
+    if (!goalText()) miss.push('填写要求')
+    return miss
+}
+
+function renderTags () {
+    $('queryTags').innerHTML = selectedQueries().map(q => `
+        <span class="qtag">
+            <span class="qname" title="点击编辑「${q.title}」" onclick="alert('演示：打开「${q.title}」编辑弹窗')">${q.title}</span>
+            <span class="qx" title="移除" onclick="removeQuery(${q.id})">✕</span>
+        </span>`).join('') + `
+        <span class="add-wrap" id="addWrap">
+            <button class="add-trigger" onclick="toggleDropdown(event)">＋ 添加数据</button>
+            <span class="dropdown" onclick="event.stopPropagation()" style="display:${$('addWrap') && $('addWrap').classList.contains('open') ? 'block' : ''}">
+                <span class="dd-search" style="display:block"><input id="ddSearch" placeholder="搜索本报告的数据查询" oninput="renderDropdown()"></span>
+                <span class="dd-toolbar" style="display:flex">
+                    <label class="dd-selonly"><input type="checkbox" id="ddSelOnly" onchange="renderDropdown()">仅看已选</label>
+                    <a class="dd-new" onclick="alert('演示：打开新建主题问数查询弹窗')">＋ 新建主题问数查询</a>
+                </span>
+                <span class="dd-list" id="ddList" style="display:block"></span>
+            </span>
+        </span>`
+}
+function renderDropdown () {
+    const kw = $('ddSearch').value.trim().toLowerCase()
+    const items = QUERIES.filter(q =>
+        (!kw || q.title.toLowerCase().includes(kw))
+        && (!$('ddSelOnly').checked || state.selected.includes(q.id)))
+    $('ddList').innerHTML = items.length ? items.map(q => `
+        <label class="dd-item">
+            <input type="checkbox" ${state.selected.includes(q.id) ? 'checked' : ''} onchange="toggleQuery(${q.id})">
+            <span class="dd-title" title="${q.title}">${q.title}</span>
+        </label>`).join('') : '<div class="dd-empty">未找到匹配的数据查询</div>'
+}
+function toggleDropdown (e) {
+    e.stopPropagation()
+    $('addWrap').classList.toggle('open')
+    if ($('addWrap').classList.contains('open')) { renderDropdown(); $('ddSearch').focus() }
+}
+document.addEventListener('click', () => { const w = $('addWrap'); if (w) w.classList.remove('open') })
+function toggleQuery (id) {
+    state.selected = state.selected.includes(id) ? state.selected.filter(x => x !== id) : [ ...state.selected, id ]
+    render(); renderDropdown()
+}
+function removeQuery (id) { state.selected = state.selected.filter(x => x !== id); render() }
+
+function recipeSentence () {
+    if (!state.basis) return ''
+    const names = QUERIES.filter(q => state.basis.queries.includes(q.id)).map(q => `「${q.title}」`).join('、')
+    return `基于 ${names}：${state.basis.goal}`
+}
+
+function render () {
+    renderTags()
+    const ready = state.contentStatus === 'ready'
+    const generating = state.contentStatus === 'generating'
+    const dirty = isDirty()
+    const card = $('dynCard')
+
+    /* 卡片两种形态：阅读（配方一句话）/ 编辑（配方表单） */
+    card.classList.toggle('editing', state.editing)
+    card.classList.toggle('reading', !state.editing && ready)
+    $('recipeText').innerHTML = recipeSentence().replace(/「([^」]*)」/g, '<b>「$1」</b>')
+
+    /* 动作行 */
+    const genBtn = $('genBtn'), hint = $('actHint')
+    genBtn.classList.remove('loading')
+    genBtn.disabled = false
+    hint.classList.remove('error')
+    hint.textContent = ''
+    const miss = missingItems()
+    if (generating) { genBtn.classList.add('loading'); genBtn.textContent = '生成中…' }
+    else if (state.error) { genBtn.textContent = '重试'; hint.textContent = state.error; hint.classList.add('error') }
+    else if (miss.length) { genBtn.disabled = true; genBtn.textContent = '生成'; hint.textContent = '完成后即可生成：' + miss.join('、') }
+    else if (ready && !dirty) { genBtn.textContent = '重新生成' }
+    else { genBtn.textContent = '生成' }
+
+    $('revertLink').style.display = dirty && !generating ? '' : 'none'
+    $('doneLink').style.display = ready && !dirty && !generating ? '' : 'none'
+    $('advLink').style.display = ready ? '' : 'none'
+    $('manualTag').style.display = state.manualPatched ? '' : 'none'
+    $('restoreLink').style.display = state.manualPatched ? '' : 'none'
+
+    /* 内容区：未生成 / 内容 / 内容+遮罩（配方改了还没生成） */
+    $('placeholder').style.display = ready ? 'none' : ''
+    $('placeholder').textContent = generating ? '正在取数并生成…' : '选好数据、写好要求，AI 生成这一段的图表和文字'
+    $('contentBody').classList.toggle('show', ready)
+    $('contentVeil').classList.toggle('show', ready && dirty)
+}
+
+function generate () {
+    if (missingItems().length || state.contentStatus === 'generating') return
+    /* 手改过的代码会被按配方重写：覆盖前显式确认 */
+    if (state.manualPatched && !confirm('这段的生成代码被手动调整过。重新生成将按配方重写代码，覆盖手动修改。继续？')) return
+    state.contentStatus = 'generating'
+    state.error = ''
+    render()
+    setTimeout(() => {
+        if ($('simGenFail').checked) {
+            state.contentStatus = state.basis ? 'ready' : 'none'
+            state.error = '生成失败：数据里没有「销售额」，请换数据或改要求'
+        } else {
+            state.contentStatus = 'ready'
+            state.basis = { queries: [ ...state.selected ].sort(), goal: goalText() }
+            state.manualPatched = false      /* 按配方重写 → 回到纯配方世界 */
+            state.editing = false            /* 生成成功 → 直接看内容（要求→内容的因果闭环） */
+        }
+        render()
+    }, 1000)
+}
+
+/* ---- 高级：查看/手改生成代码 ---- */
+function toggleAdvanced () { $('advBox').classList.toggle('show') }
+function applyScript () {
+    $('advBox').classList.remove('show')
+    state.contentStatus = 'generating'
+    render()
+    $('placeholder').textContent = '正在校验并执行修改后的代码…'
+    setTimeout(() => {
+        state.contentStatus = 'ready'
+        state.manualPatched = true      /* 留痕：内容不再完全由配方决定 */
+        state.editing = false
+        render()
+    }, 700)
+}
+function restoreFromRecipe () {
+    if (!confirm('将丢弃手动修改，按当前配方重新生成这段代码和内容。继续？')) return
+    $('advBox').classList.remove('show')
+    state.manualPatched = false
+    generate()
+}
+
+function startEdit () { state.editing = true; render() }
+function stopEdit () { state.editing = false; render() }
+function revertDraft () {
+    /* Esc 语义：草稿回到配方快照 */
+    state.selected = [ ...state.basis.queries ]
+    $('goalInput').value = state.basis.goal
+    render()
+}
+
+render()
+</script>
+</body>
+</html>

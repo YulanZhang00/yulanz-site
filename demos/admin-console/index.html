@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Data Agent · 智能体管理 — 观远数据</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+  <!-- ===== 平台级框架（静态环境，非本次设计对象） ===== -->
+  <header class="gd-topbar">
+    <div class="gd-logo">
+      <span class="gd-logo-mark"></span>
+      <span class="gd-logo-text">观远数据</span>
+      <span class="gd-bot">🤖</span>
+    </div>
+    <nav class="gd-nav">
+      <a>数据分析</a><a>数据应用</a><a>指标中心</a><a>数据开发</a><a>数据准备</a><a>云市场</a>
+      <a class="active">Data Agent</a>
+    </nav>
+    <div class="gd-topbar-right">
+      <span class="gd-ico">◐</span><span class="gd-ico">?</span><span class="gd-ico">⤓</span>
+      <span class="gd-ico">⚙</span><span class="gd-ico">⌕</span><span class="gd-ico">⠿</span>
+      <span class="gd-avatar">A</span>
+    </div>
+  </header>
+
+  <div class="gd-body">
+    <!-- 平台左侧图标栏（静态环境） -->
+    <aside class="gd-rail">
+      <span class="rail-ico accent">✦</span>
+      <span class="rail-ico">💬</span>
+      <span class="rail-ico">📋</span>
+      <span class="rail-ico active" title="智能体管理">◈</span>
+      <span class="rail-ico">✎</span>
+      <span class="rail-gap"></span>
+      <span class="rail-ico sm">📈</span>
+      <span class="rail-ico sm">👥</span>
+      <span class="rail-ico sm">Ｙ</span>
+      <span class="rail-collapse">⇤</span>
+    </aside>
+
+    <!-- ===== 本次设计范围：内容区 ===== -->
+    <div class="workspace">
+      <main class="main" id="main"></main>
+    </div>
+  </div>
+</div>
+
+<div id="drawer-root"></div>
+<div id="modal-root"></div>
+<div id="toast-root"></div>
+
+<script src="js/data.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
